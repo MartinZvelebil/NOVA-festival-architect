@@ -137,8 +137,9 @@ That is what keeps the tests able to check the rules without rendering anything.
 
 ## Workflow
 
-- One task at a time, on its own branch named after it: `feature-2-timetable`,
-  `bug-001-overlap`. **Never commit to main directly.**
+- The work is split into seven tasks in `specs/00-task-list.md`. Read that first: it fixes the
+  order, the branch name and which tests each task turns green. One task per branch, named in the
+  table. **Never commit to main directly.**
 - Commit messages follow the starters: `Fix issue 001: <what is true now>` or
   `Feature 2: <what you built>`. Subject line only.
 - **Change code only when asked** to fix one specific issue or build one specific spec. Fix that
