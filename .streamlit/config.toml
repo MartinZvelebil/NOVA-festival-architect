@@ -1,0 +1,13 @@
+# How the app looks. Streamlit reads this file on its own when you run app.py.
+# The palette is a bottle-green bar wall, off-white print paper, one hot riso red
+# and the warm amber of a hanging bulb. Change a colour here, not in app.py.
+[theme]
+base = "dark"
+primaryColor = "#E8432C"            # riso red: buttons, links, the selected thing
+backgroundColor = "#0D4234"         # bottle green: the wall
+secondaryBackgroundColor = "#125140" # a lighter green: cards, sidebar, inputs
+textColor = "#F3EADF"               # off-white paper
+font = "sans serif"
+
+[server]
+headless = true

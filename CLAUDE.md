@@ -29,13 +29,14 @@ db.py                reads and writes the CSV files: load_table, save_table, app
 seed.py              uv run python seed.py -> resets data/ from seed/
 data/*.csv           the live "database", one file per table
 seed/*.csv           pristine copies of the same files
+.streamlit/config.toml  the colour theme (see "How it looks")
 tests/conftest.py    shared test helpers (a throwaway copy of the data for each test)
 tests/test_*.py      one file per feature or bug
 specs/               what to build, one file per feature
 issues/              what is broken, one file per bug
 ASSIGNMENT.md        the business requirements (FA01–FA05, FA R1–R5, scenarios A1–A6)
 README.md            what the app is, how to run it, folder map
-pyproject.toml       streamlit and pytest, pinned (uv reads this)
+pyproject.toml       the libraries, pinned (uv reads this)
 ```
 
 The dependency direction is one-way and must stay that way: `app.py` → `logic.py` → `db.py`.
@@ -77,10 +78,46 @@ Match the starter apps — the grader reads this code, so plainness beats clever
 - Full words for names: `remaining_budget`, not `rem_bud`. Functions are verbs
   (`book_artist`, `remove_booking`), predicates read as questions (`is_stage_free`).
 - Comments explain *why*, not *what*, and only where a rule is non-obvious.
-- Standard library only, plus `streamlit` and `pytest` pinned in `pyproject.toml`. Do not add a
-  dependency without asking.
+- Standard library only, plus the pinned libraries in `pyproject.toml` (`streamlit`, `pytest`,
+  `streamlit-extras`, `streamlit-calendar`). Do not add a dependency without asking.
 - Every function that rejects something explains why in plain language — "Stage A is busy until
   17:00", not `False` (FA02).
+
+## How it looks
+
+The app should look like a festival programme, not a spreadsheet. The palette is a bottle-green
+bar wall, off-white print paper, one hot riso red and the amber of a hanging bulb:
+
+| Colour | Hex | Used for |
+| --- | --- | --- |
+| Bottle green | `#0D4234` | the page background |
+| Deep green | `#125140` | cards, sidebar, inputs |
+| Riso red | `#E8432C` | buttons, links, the selected thing, Stage 1 |
+| Paper | `#F3EADF` | text |
+| Bulb amber | `#E9A13B` | warnings, refusals, Stage 2 |
+
+- The four Streamlit colours live in `.streamlit/config.toml`. **Change a colour there, never in
+  `app.py`.** Streamlit picks the file up by itself when you run the app.
+- Red and amber are the two stage colours in the timetable. Nothing else uses them, so a colour
+  always means a stage.
+
+### Which widget to use where
+
+- **The timetable is a `streamlit-calendar` day view**, one column per stage, 14:00 to 23:00 down
+  the side. This is the main screen (FA03) and the one place a real component earns its keep.
+  Docs: https://github.com/im-perativa/streamlit-calendar
+- **`streamlit-extras` for polish only** — styled metric cards for the budget numbers, badges for
+  "already booked". Nothing that holds state. Gallery: https://arnaudmiribel.github.io/streamlit-extras/
+- **Plain Streamlit for everything else**: forms, selectboxes, lists, buttons.
+
+Both packages are pinned in `pyproject.toml` and are hard requirements — if the calendar fails to
+render, fix it, do not quietly fall back to a list. Do not add a third UI package without asking.
+
+### The line that must not be crossed
+
+`logic.py` never imports Streamlit and never mentions a colour, a label or a format. It returns
+facts — a start time, a refusal sentence, a number of euros — and `app.py` decides how they look.
+That is what keeps the tests able to check the rules without rendering anything.
 
 ## Tests
 

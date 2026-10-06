@@ -1,0 +1,17 @@
+[project]
+name = "festival-architect"
+version = "0.1.0"
+description = "Festival Architect — Introduction to Programming, Nova SBE 2026/27"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "streamlit==1.62.0",
+    "pytest==9.1.1",
+    "streamlit-extras==1.6.0",
+    "streamlit-calendar==1.4.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
