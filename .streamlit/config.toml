@@ -1,12 +1,12 @@
 # How the app looks. Streamlit reads this file on its own when you run app.py.
-# The palette is a bottle-green bar wall, off-white print paper, one hot riso red
-# and the warm amber of a hanging bulb. Change a colour here, not in app.py.
+# "Earthy and serene": warm sand surfaces, near-black soil text, and the olive green
+# of the reference photo as the one accent. Change a colour here, not in app.py.
 [theme]
-base = "dark"
-primaryColor = "#E8432C"            # riso red: buttons, links, the selected thing
-backgroundColor = "#0D4234"         # bottle green: the wall
-secondaryBackgroundColor = "#125140" # a lighter green: cards, sidebar, inputs
-textColor = "#F3EADF"               # off-white paper
+base = "light"
+primaryColor = "#4A5D3A"            # olive green: buttons, links, the selected thing, Stage 2
+backgroundColor = "#C8B49A"         # lifted sand: the page
+secondaryBackgroundColor = "#AC8968" # warm sand: cards, sidebar, inputs
+textColor = "#3E362E"               # soil: all text
 font = "sans serif"
 
 [server]
