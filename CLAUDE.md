@@ -85,21 +85,24 @@ Match the starter apps — the grader reads this code, so plainness beats clever
 
 ## How it looks
 
-The app should look like a festival programme, not a spreadsheet. The palette is a bottle-green
-bar wall, off-white print paper, one hot riso red and the amber of a hanging bulb:
+The app should look like a festival programme, not a spreadsheet. The palette is "earthy and
+serene": warm sand surfaces, soil-dark text, and one olive green doing all the work an accent does.
 
 | Colour | Hex | Used for |
 | --- | --- | --- |
-| Bottle green | `#0D4234` | the page background |
-| Deep green | `#125140` | cards, sidebar, inputs |
-| Riso red | `#E8432C` | buttons, links, the selected thing, Stage 1 |
-| Paper | `#F3EADF` | text |
-| Bulb amber | `#E9A13B` | warnings, refusals, Stage 2 |
+| Lifted sand | `#C8B49A` | the page background |
+| Warm sand | `#AC8968` | cards, sidebar, inputs |
+| Soil | `#3E362E` | all text |
+| Olive green | `#4A5D3A` | buttons, links, the selected thing, Stage 2 |
+| Timber brown | `#865D36` | Stage 1 |
+| Taupe | `#93785B` | muted dividers, disabled things |
 
 - The four Streamlit colours live in `.streamlit/config.toml`. **Change a colour there, never in
   `app.py`.** Streamlit picks the file up by itself when you run the app.
-- Red and amber are the two stage colours in the timetable. Nothing else uses them, so a colour
-  always means a stage.
+- Timber brown and olive green are the two stage colours in the timetable. Nothing else uses them,
+  so a colour always means a stage.
+- A refusal is olive-bordered with soil text, never red. The palette has no alarm colour on
+  purpose: the sentence carries the bad news, not the colour.
 
 ### Which widget to use where
 
