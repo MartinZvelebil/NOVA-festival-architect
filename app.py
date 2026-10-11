@@ -191,7 +191,12 @@ def calendar_options():
         "allDaySlot": False,
         "headerToolbar": {"left": "", "center": "", "right": ""},
         "height": 760,
-        "editable": False,
+        # Blocks can be dragged to another time or stage; every drag still goes through
+        # logic.edit_booking, so the rules decide. Length belongs to the artist, so no resizing.
+        "editable": True,
+        "eventStartEditable": True,
+        "eventDurationEditable": False,
+        "eventResizableFromStart": False,
         "resources": resources,
     }
 
@@ -260,7 +265,10 @@ def show_lineup():
     """The festival day as a calendar: one column per stage, opening time to closing time."""
     st.title("The lineup")
     show_remembered_message()
+    show_remembered_refusal()
     show_budget()
+    st.caption("Drag a performance to another time or stage. "
+               "Click one to see the artist behind it.")
 
     if len(logic.all_bookings()) == 0:
         st.caption("Nothing booked yet. Add a performance first.")
@@ -271,11 +279,14 @@ def show_lineup():
     timetable_column, detail_column = st.columns([3, 1])
     with timetable_column:
         clicked = calendar(events=calendar_events(), options=calendar_options(),
-                           custom_css=CALENDAR_CSS, key="timetable")
+                           custom_css=CALENDAR_CSS,
+                           key="timetable-" + str(calendar_version()))
+        apply_dragged_change(clicked)
     with detail_column:
         show_clicked_performance(clicked)
 
-    show_revise(clicked_booking_id(clicked))
+    with st.expander("Change a performance by hand"):
+        show_revise(clicked_booking_id(clicked))
 
     with st.expander("The same lineup as a list"):
         show_lineup_as_a_list()
@@ -308,7 +319,6 @@ def position_of(booking_id, ids):
 
 def show_revise(clicked_id):
     """Move a performance to another stage or time, or take it out of the lineup (FA04)."""
-    st.subheader("Change a performance")
     ids = booked_ids()
     if len(ids) == 0:
         return
@@ -333,6 +343,7 @@ def show_revise(clicked_id):
         refusal = logic.edit_booking(booking_id, stage_id, start_time)
         if refusal == "":
             remember_message(booking_label(booking_id) + " — moved.")
+            redraw_calendar()
             st.rerun()
         else:
             st.warning(refusal)
@@ -341,9 +352,76 @@ def show_revise(clicked_id):
         refusal = logic.remove_booking(booking_id)
         if refusal == "":
             remember_message(name + " is out of the lineup. The fee is back in the budget.")
+            redraw_calendar()
             st.rerun()
         else:
             st.warning(refusal)
+
+
+def dragged_change(payload):
+    """Return (booking_id, stage_id, start_time) when a block was dragged, or None.
+
+    The calendar reports the block's new position; it is a request, not a decision.
+    """
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("callback") != "eventChange":
+        return None
+    event = payload.get("eventChange", {}).get("event", {})
+    booking_id = event.get("id")
+    stage_id = event.get("resourceId")
+    starts_at = event.get("start", "")
+    if booking_id is None or stage_id is None or "T" not in starts_at:
+        return None
+    # "2026-06-20T16:30:00+00:00" -> "16:30"
+    return booking_id, str(stage_id), starts_at.split("T")[1][:5]
+
+
+def calendar_version():
+    """Return which drawing of the calendar we are on."""
+    if "calendar_version" in st.session_state:
+        return st.session_state["calendar_version"]
+    return 0
+
+
+def redraw_calendar():
+    """Draw the calendar from scratch, so a refused drag snaps back to where it was."""
+    st.session_state["calendar_version"] = calendar_version() + 1
+
+
+def remember_refusal(text):
+    """Keep a refusal so it survives the redraw that puts the block back."""
+    st.session_state["refusal"] = text
+
+
+def show_remembered_refusal():
+    """Print the refusal left by the last rejected drag, once."""
+    if "refusal" in st.session_state:
+        st.warning(st.session_state["refusal"])
+        del st.session_state["refusal"]
+
+
+def apply_dragged_change(payload):
+    """Ask logic to accept a dragged block, and say so when it refuses (FA04)."""
+    change = dragged_change(payload)
+    if change is None:
+        return
+    booking_id, stage_id, start_time = change
+
+    booking = logic.get_booking(booking_id)
+    if booking is None:
+        return
+    if booking["stage_id"] == stage_id and booking["start_time"] == start_time:
+        # the calendar is only telling us where the block already is
+        return
+
+    refusal = logic.edit_booking(booking_id, stage_id, start_time)
+    if refusal == "":
+        remember_message(booking_label(booking_id) + " — moved.")
+    else:
+        remember_refusal(refusal)
+    redraw_calendar()
+    st.rerun()
 
 
 def clicked_booking_id(clicked):
