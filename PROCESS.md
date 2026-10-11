@@ -141,3 +141,33 @@ be booked. Task 4 before 5, because finalisation is a lock on top of editing.
 5. **Look at the design before committing to it.** A throwaway preview with fake data costs
    minutes and saved a palette I would have disliked three tasks later.
 6. **Plan the order, and write down why it is the order.** The reason is the part you forget.
+
+---
+
+## Where each requirement ended up
+
+Written at the end of Task 7, by walking `ASSIGNMENT.md` line by line and finding, for every ID,
+the one function that decides it and the one test that proves it. Nothing in the table is a plan:
+every line was checked against the code and against a green test run.
+
+| Requirement | Where the rule is decided | The test that proves it |
+| --- | --- | --- |
+| FA01 Browse artists | `app.py:506 show_artist_card` draws genre, fee and set length; `logic.py:98 is_booked` greys out whoever is already playing | `test_catalogue.py::test_an_artist_over_the_budget_names_the_shortfall` |
+| FA02 Schedule a performance | `logic.py:182 check_booking` and `logic.py:234 add_booking`; the end time comes from `logic.py:70 end_time` | `test_acceptance.py::test_a1_overlap_on_the_same_stage_is_rejected` |
+| FA03 Review the plan | `logic.py:121 timetable`, `logic.py:147 total_fees`, `logic.py:160 remaining_budget`, shown in the sidebar at `app.py:355` | `test_timetable.py::test_the_timetable_is_in_time_order_not_booking_order` |
+| FA04 Revise a booking | `logic.py:251 edit_booking` and `logic.py:282 remove_booking` | `test_acceptance.py::test_a5_removing_a_booking_releases_its_slot_and_its_fee` |
+| FA05 Finalise and reopen | `logic.py:324 can_finalise`, `logic.py:335 finalise_plan`, `logic.py:348 reopen_plan` | `test_acceptance.py::test_a6_four_valid_bookings_can_be_finalised` |
+| FA R1 Artist availability | the duplicate check at `logic.py:192`; the fee is never stored, so removal releases it by itself | `test_acceptance.py::test_a4_an_artist_cannot_be_booked_twice_on_any_stage` |
+| FA R2 Time and stage | `logic.py:50 to_minutes` and `logic.py:177 overlaps`, whose strict `<` is what lets one set start exactly when the last one ends | `test_acceptance.py::test_a3_a_set_that_ends_exactly_at_the_close_is_allowed` |
+| FA R3 Simultaneous performances | the stage filter at `logic.py:210`: a clash is only ever looked for on the same stage | `test_acceptance.py::test_a2_two_artists_may_play_at_the_same_time_on_different_stages` |
+| FA R4 Budget | the fee check at `logic.py:222`, against `remaining_budget`; an edit of the same artist does not pay twice | `test_acceptance.py::test_a4_a_booking_one_euro_over_the_budget_is_rejected` |
+| FA R5 Valid edits | `booking_id` threaded into `check_booking`, so a set never clashes with itself; `FINAL_REFUSAL` guards every change | `test_acceptance.py::test_a5_a_rejected_edit_leaves_the_original_booking_untouched` |
+
+Two properties are not one function and so are not in the table. **Totals are never stored** — the
+timetable and the budget are both recomputed from `bookings.csv`, which is why they cannot
+disagree. And **a refusal writes nothing**: every mutator checks before it touches `db`, proved by
+comparing the CSV files byte for byte either side of a rejected action.
+
+**What the table is for.** It is the answer to "where does this rule live", and the thing to
+rebuild first if the code ever moves. Writing it was also the last check on the brief: a
+requirement with no function to point at is a requirement that was not built.
