@@ -131,3 +131,22 @@ def test_the_lineup_screen_renders(tmp_path, monkeypatch):
     app.sidebar.radio[0].set_value("The lineup").run()
     assert not app.exception
     assert app.title[0].value == "The lineup"
+
+
+# ---------- clicking a performance ----------
+
+def test_a_clicked_block_names_its_booking():
+    """The calendar hands back the block that was clicked; we read its booking id from it."""
+    import app
+
+    clicked = {"callback": "eventClick", "eventClick": {"event": {"id": "3"}}}
+    assert app.clicked_booking_id(clicked) == "3"
+
+
+def test_anything_that_is_not_a_click_selects_nothing():
+    """The calendar also reports scrolling and view changes. None of those open the detail."""
+    import app
+
+    assert app.clicked_booking_id(None) is None
+    assert app.clicked_booking_id({}) is None
+    assert app.clicked_booking_id({"callback": "datesSet"}) is None

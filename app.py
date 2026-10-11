@@ -152,6 +152,7 @@ def calendar_events():
     for stage in logic.all_stages():
         for performance in logic.timetable(stage["id"]):
             events.append({
+                "id": performance["booking_id"],
                 "title": performance["name"],
                 "start": FESTIVAL_DAY + "T" + performance["start_time"] + ":00",
                 "end": FESTIVAL_DAY + "T" + performance["end_time"] + ":00",
@@ -174,9 +175,14 @@ def calendar_options():
         "slotMinTime": logic.opens() + ":00",
         "slotMaxTime": logic.closes() + ":00",
         "slotDuration": "00:30:00",
+        # A half-hour slot needs real height, or a 40-minute set clips its own name.
+        "slotMinHeight": 46,
+        "expandRows": True,
+        "eventTimeFormat": {"hour": "2-digit", "minute": "2-digit", "hour12": False},
+        "slotLabelFormat": {"hour": "2-digit", "minute": "2-digit", "hour12": False},
         "allDaySlot": False,
         "headerToolbar": {"left": "", "center": "", "right": ""},
-        "height": 620,
+        "height": 760,
         "editable": False,
         "resources": resources,
     }
@@ -191,6 +197,10 @@ CALENDAR_CSS = """
     .fc-theme-standard td, .fc-theme-standard th,
     .fc-theme-standard .fc-scrollgrid { border-color: rgba(62,54,46,.22); }
     .fc-event-title { font-weight: 700; }
+    .fc-timegrid-event .fc-event-main { padding: 2px 4px; overflow: hidden; }
+    .fc-timegrid-event .fc-event-time { font-size: .72em; opacity: .85; }
+    .fc-timegrid-event .fc-event-title { font-size: .86em; line-height: 1.15; }
+    .fc-timegrid-event { cursor: pointer; }
 """
 
 
@@ -247,11 +257,44 @@ def show_lineup():
         st.caption("Nothing booked yet. Add a performance first.")
         return
 
-    calendar(events=calendar_events(), options=calendar_options(),
-             custom_css=CALENDAR_CSS, key="timetable")
+    clicked = calendar(events=calendar_events(), options=calendar_options(),
+                       custom_css=CALENDAR_CSS, key="timetable")
+    show_clicked_performance(clicked)
 
     with st.expander("The same lineup as a list"):
         show_lineup_as_a_list()
+
+
+def clicked_booking_id(clicked):
+    """Return the booking id of the block the organiser clicked, or None if they clicked none."""
+    if not isinstance(clicked, dict):
+        return None
+    if clicked.get("callback") != "eventClick":
+        return None
+    return clicked.get("eventClick", {}).get("event", {}).get("id")
+
+
+def show_clicked_performance(clicked):
+    """Show everything about the performance whose block was clicked (FA01, FA03)."""
+    booking_id = clicked_booking_id(clicked)
+    if booking_id is None:
+        st.caption("Click a performance to see the artist behind it.")
+        return
+
+    booking = logic.get_booking(booking_id)
+    if booking is None:
+        return
+    artist = logic.get_artist(booking["artist_id"])
+
+    with st.container(border=True):
+        st.markdown("#### " + artist["name"])
+        st.caption(artist["genre"])
+        first, second, third, fourth = st.columns(4)
+        first.metric("Fee", artist["fee"] + " €")
+        second.metric("Set length", artist["duration_min"] + " min")
+        third.metric("Stage", logic.stage_name(booking["stage_id"]))
+        fourth.metric("Plays", booking["start_time"] + "–"
+                      + logic.end_time(artist["id"], booking["start_time"]))
 
 
 def show_lineup_as_a_list():
