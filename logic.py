@@ -5,6 +5,10 @@ Nothing here is built yet. Every function below is a signature the acceptance te
 """
 import db
 
+# What every change says while the plan is locked (FA R5).
+FINAL_REFUSAL = "The plan is final. Reopen it as a draft before changing the lineup."
+
+
 # ---------- settings ----------
 # The numbers of the brief live in data/settings.csv, one row per setting, so the festival day,
 # the budget and the finalisation rule can be changed without touching the code. The values that
@@ -228,6 +232,8 @@ def check_booking(artist_id, stage_id, start_time, booking_id=None):
 
 def add_booking(artist_id, stage_id, start_time):
     """Add one performance to the lineup, or refuse and say why (FA02)."""
+    if is_final():
+        return FINAL_REFUSAL
     refusal = check_booking(artist_id, stage_id, start_time)
     if refusal != "":
         # Nothing is written when we refuse: the saved plan stays exactly as it was.
@@ -248,6 +254,8 @@ def edit_booking(booking_id, stage_id, start_time):
     the fee is charged once, and the booking being moved is ignored while looking for clashes,
     so a set never clashes with itself.
     """
+    if is_final():
+        return FINAL_REFUSAL
     booking = get_booking(booking_id)
     if booking is None:
         return "That performance is not in the lineup."
@@ -276,6 +284,8 @@ def remove_booking(booking_id):
     The fee is not stored anywhere, so dropping the row is all it takes: total_fees adds up
     what is left, and the artist becomes bookable again.
     """
+    if is_final():
+        return FINAL_REFUSAL
     if get_booking(booking_id) is None:
         return "That performance is not in the lineup."
 
@@ -291,14 +301,56 @@ def remove_booking(booking_id):
 
 def plan_status():
     """Return 'draft' or 'final' (FA05)."""
-    raise NotImplementedError("FA05: not built yet")
+    rows = db.load_table("plan")
+    if len(rows) == 0:
+        return "draft"
+    return rows[0]["status"]
+
+
+def is_final():
+    """Say whether the plan is locked. A final plan refuses every change until reopened."""
+    return plan_status() == "final"
+
+
+def save_status(status):
+    """Write the plan's status, so it is still true after the app is closed and reopened."""
+    rows = db.load_table("plan")
+    for row in rows:
+        row["status"] = status
+    db.save_table("plan", rows)
+
+
+def can_finalise():
+    """Return why the plan cannot be made final yet, or '' when it can (FA05)."""
+    booked = len(all_bookings())
+    needed = min_artists_to_finalise()
+    if booked < needed:
+        missing = needed - booked
+        return ("A lineup needs at least " + str(needed) + " artists before it can be final. "
+                + str(booked) + " are booked, so " + str(missing) + " more to go.")
+    return ""
 
 
 def finalise_plan():
     """Mark the plan final, or refuse and say why (FA05)."""
-    raise NotImplementedError("FA05: not built yet")
+    if is_final():
+        return "The plan is already final."
+
+    refusal = can_finalise()
+    if refusal != "":
+        return refusal
+
+    save_status("final")
+    return ""
 
 
 def reopen_plan():
-    """Put a final plan back into draft so it can be edited again (FA05)."""
-    raise NotImplementedError("FA05: not built yet")
+    """Put a final plan back into draft so it can be edited again (FA05).
+
+    Nothing else unlocks a plan: not a restart, not an edit, not a new booking.
+    """
+    if not is_final():
+        return "The plan is already a draft."
+
+    save_status("draft")
+    return ""
