@@ -21,8 +21,6 @@ WARM_SAND = "#AC8968"
 # draw, so we pick one; nothing is stored against it and no rule ever reads it.
 FESTIVAL_DAY = "2026-06-20"
 
-# The detail panel stands as tall as the calendar next to it, so the row never changes shape.
-DETAIL_HEIGHT = 760
 
 
 # ---------- small helpers ----------
@@ -459,7 +457,7 @@ def show_clicked_performance(clicked):
     booking_id = clicked_booking_id(clicked)
 
     if booking_id is None:
-        with st.container(border=True, height=DETAIL_HEIGHT):
+        with st.container(border=True):
             st.markdown("#### The performance")
             st.caption("Click a block in the timetable to see the artist behind it, "
                        "and to cancel it.")
@@ -470,18 +468,16 @@ def show_clicked_performance(clicked):
         return
     artist = logic.get_artist(booking["artist_id"])
 
-    with st.container(border=True, height=DETAIL_HEIGHT):
+    with st.container(border=True):
         st.markdown("#### " + artist["name"])
         st.caption(artist["genre"])
 
-        # Two facts per row: four stacked metric cards plus a button do not fit the panel.
-        plays, stage = st.columns(2)
-        plays.metric("Plays", booking["start_time"] + "–"
-                     + logic.end_time(artist["id"], booking["start_time"]))
-        stage.metric("Stage", logic.stage_name(booking["stage_id"]))
-        length, fee = st.columns(2)
-        length.metric("Set length", artist["duration_min"] + " min")
-        fee.metric("Fee", artist["fee"] + " €")
+        # One fact per row: a stage name or a time is too long to share a line.
+        st.metric("Plays", booking["start_time"] + "–"
+                  + logic.end_time(artist["id"], booking["start_time"]))
+        st.metric("Stage", logic.stage_name(booking["stage_id"]))
+        st.metric("Set length", artist["duration_min"] + " min")
+        st.metric("Fee", artist["fee"] + " €")
         style_metric_cards(background_color=WARM_SAND, border_left_color=STAGE_COLOURS[1],
                            border_color=WARM_SAND, box_shadow=False)
 
