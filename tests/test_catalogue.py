@@ -233,3 +233,23 @@ def test_the_tutorial_describes_the_festival_that_is_configured(tmp_path, monkey
     said = " ".join(block.value for block in app.markdown)
     assert "14:00 to 20:00" in said
     assert "4500 €" in said
+
+
+def test_every_card_reserves_a_line_for_the_budget(tmp_path, monkeypatch):
+    """Affordable or not, each card prints a budget line, so every button sits at one height."""
+    use_temp_data(tmp_path, monkeypatch)
+    save_catalogue([
+        make_artist("1", fee="9000", duration_min="60"),
+        make_artist("2", fee="1000", duration_min="60"),
+        make_artist("3", fee="1001", duration_min="60"),
+    ])
+    logic.add_booking("1", "1", "14:00")
+
+    app = open_app()
+    budget_lines = []
+    for block in app.caption:
+        if "over budget" in block.value or block.value == "&nbsp;":
+            budget_lines.append(block.value)
+    # one per unbooked artist, and the booked one keeps its blank line too
+    assert len(budget_lines) == 3
+    assert any("1 € over budget" in line for line in budget_lines)

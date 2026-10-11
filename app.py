@@ -153,7 +153,7 @@ def calendar_options():
         "slotMinTime": logic.opens() + ":00",
         "slotMaxTime": logic.closes() + ":00",
         "slotDuration": "00:30:00",
-        "snapDuration": "00:15:00",
+        "snapDuration": "00:05:00",
         "slotMinHeight": 46,
         "expandRows": True,
         "eventTimeFormat": {"hour": "2-digit", "minute": "2-digit", "hour12": False},
@@ -497,8 +497,12 @@ def show_artist_card(artist, column):
             st.markdown("#### " + artist["name"])
         st.caption(artist["genre"] + " · **" + artist["fee"] + " €** · "
                    + artist["duration_min"] + " min")
+        # The budget line is always printed, empty when the artist fits, so that every
+        # button in the row starts at the same height.
         if over_budget != "" and not booked:
             st.caption(":grey[" + over_budget + "]")
+        else:
+            st.caption("&nbsp;", unsafe_allow_html=True)
 
         if logic.is_final():
             # a final plan picks nobody up, so no card carries a button at all
