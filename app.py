@@ -133,6 +133,37 @@ def stage_ids():
 
 # ---------- the money ----------
 
+def show_plan_status():
+    """Say whether the plan is a draft or final, and offer the way across (FA05)."""
+    if logic.is_final():
+        with st.container(border=True):
+            left, right = st.columns([3, 1])
+            left.markdown("**This lineup is final.** It cannot be changed until you reopen it.")
+            if right.button("Reopen as draft", use_container_width=True):
+                logic.reopen_plan()
+                remember_message("The plan is a draft again. You can change the lineup.")
+                redraw_calendar()
+                st.rerun()
+        return
+
+    refusal = logic.can_finalise()
+    with st.container(border=True):
+        left, right = st.columns([3, 1])
+        if refusal == "":
+            left.markdown("**This lineup is a draft.** Everything is in place to make it final.")
+        else:
+            left.markdown("**This lineup is a draft.** " + refusal)
+        if right.button("Finalise the lineup", use_container_width=True,
+                        disabled=refusal != "", type="primary"):
+            problem = logic.finalise_plan()
+            if problem == "":
+                remember_message("The lineup is final.")
+            else:
+                remember_refusal(problem)
+            redraw_calendar()
+            st.rerun()
+
+
 def show_budget():
     """The two numbers that must agree with the lineup after every accepted change."""
     left, middle, right = st.columns(3)
@@ -193,7 +224,7 @@ def calendar_options():
         "height": 760,
         # Blocks can be dragged to another time or stage; every drag still goes through
         # logic.edit_booking, so the rules decide. Length belongs to the artist, so no resizing.
-        "editable": True,
+        "editable": not logic.is_final(),
         "eventStartEditable": True,
         "eventDurationEditable": False,
         "eventResizableFromStart": False,
@@ -236,6 +267,9 @@ def show_booking():
             show_artist_card(row[position], columns[position])
 
     st.subheader("Add a performance")
+    if logic.is_final():
+        st.info("The lineup is final. Reopen it as a draft on the lineup screen to book more.")
+        return
     free = free_artist_ids()
     if len(free) == 0:
         st.caption("Every artist in the catalogue is already playing.")
@@ -266,9 +300,13 @@ def show_lineup():
     st.title("The lineup")
     show_remembered_message()
     show_remembered_refusal()
+    show_plan_status()
     show_budget()
-    st.caption("Drag a performance to another time or stage. "
-               "Click one to see the artist behind it.")
+    if logic.is_final():
+        st.caption("Click a performance to see the artist behind it.")
+    else:
+        st.caption("Drag a performance to another time or stage. "
+                   "Click one to see the artist behind it.")
 
     if len(logic.all_bookings()) == 0:
         st.caption("Nothing booked yet. Add a performance first.")
@@ -285,8 +323,9 @@ def show_lineup():
     with detail_column:
         show_clicked_performance(clicked)
 
-    with st.expander("Change a performance by hand"):
-        show_revise(clicked_booking_id(clicked))
+    if not logic.is_final():
+        with st.expander("Change a performance by hand"):
+            show_revise(clicked_booking_id(clicked))
 
     with st.expander("The same lineup as a list"):
         show_lineup_as_a_list()
@@ -481,9 +520,10 @@ def show_clicked_performance(clicked):
         style_metric_cards(background_color=WARM_SAND, border_left_color=STAGE_COLOURS[1],
                            border_color=WARM_SAND, box_shadow=False)
 
-        if st.button("Cancel this performance", key="cancel_" + booking["id"],
-                     use_container_width=True):
-            cancel_performance(booking["id"])
+        if not logic.is_final():
+            if st.button("Cancel this performance", key="cancel_" + booking["id"],
+                         use_container_width=True):
+                cancel_performance(booking["id"])
 
 
 def show_lineup_as_a_list():
