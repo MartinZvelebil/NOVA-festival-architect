@@ -21,8 +21,6 @@ WARM_SAND = "#AC8968"
 # draw, so we pick one; nothing is stored against it and no rule ever reads it.
 FESTIVAL_DAY = "2026-06-20"
 
-# The detail panel stands as tall as the calendar next to it, so the row never changes shape.
-DETAIL_HEIGHT = 760
 
 
 # ---------- small helpers ----------
@@ -105,10 +103,15 @@ def free_artist_ids():
     return ids
 
 
+def clock_value(time_text):
+    """Turn a stored time like '16:30' into the clock value a time picker wants."""
+    minutes = logic.to_minutes(time_text)
+    return time(minutes // 60, minutes % 60)
+
+
 def opening_time():
     """Return the festival's opening time as a clock value, for the time picker's default."""
-    minutes = logic.to_minutes(logic.opens())
-    return time(minutes // 60, minutes % 60)
+    return clock_value(logic.opens())
 
 
 def chosen_position(free):
@@ -178,6 +181,8 @@ def calendar_options():
         "slotMinTime": logic.opens() + ":00",
         "slotMaxTime": logic.closes() + ":00",
         "slotDuration": "00:30:00",
+        # the grid shows half hours, but a dragged block lands on the nearest quarter
+        "snapDuration": "00:15:00",
         # A half-hour slot needs real height, or a 40-minute set clips its own name.
         "slotMinHeight": 46,
         "expandRows": True,
@@ -186,7 +191,12 @@ def calendar_options():
         "allDaySlot": False,
         "headerToolbar": {"left": "", "center": "", "right": ""},
         "height": 760,
-        "editable": False,
+        # Blocks can be dragged to another time or stage; every drag still goes through
+        # logic.edit_booking, so the rules decide. Length belongs to the artist, so no resizing.
+        "editable": True,
+        "eventStartEditable": True,
+        "eventDurationEditable": False,
+        "eventResizableFromStart": False,
         "resources": resources,
     }
 
@@ -254,7 +264,11 @@ def show_booking():
 def show_lineup():
     """The festival day as a calendar: one column per stage, opening time to closing time."""
     st.title("The lineup")
+    show_remembered_message()
+    show_remembered_refusal()
     show_budget()
+    st.caption("Drag a performance to another time or stage. "
+               "Click one to see the artist behind it.")
 
     if len(logic.all_bookings()) == 0:
         st.caption("Nothing booked yet. Add a performance first.")
@@ -265,12 +279,165 @@ def show_lineup():
     timetable_column, detail_column = st.columns([3, 1])
     with timetable_column:
         clicked = calendar(events=calendar_events(), options=calendar_options(),
-                           custom_css=CALENDAR_CSS, key="timetable")
+                           custom_css=CALENDAR_CSS,
+                           key="timetable-" + str(calendar_version()))
+        apply_dragged_change(clicked)
     with detail_column:
         show_clicked_performance(clicked)
 
+    with st.expander("Change a performance by hand"):
+        show_revise(clicked_booking_id(clicked))
+
     with st.expander("The same lineup as a list"):
         show_lineup_as_a_list()
+
+
+def booking_label(booking_id):
+    """Turn a booking id into the text shown in the performance picker."""
+    booking = logic.get_booking(booking_id)
+    artist = logic.get_artist(booking["artist_id"])
+    return (artist["name"] + " · " + logic.stage_name(booking["stage_id"])
+            + " · " + booking["start_time"])
+
+
+def booked_ids():
+    """Return the ids of every performance in the lineup, in time order within each stage."""
+    ids = []
+    for stage in logic.all_stages():
+        for performance in logic.timetable(stage["id"]):
+            ids.append(performance["booking_id"])
+    return ids
+
+
+def position_of(booking_id, ids):
+    """Return where a performance sits in the picker, or 0 when it is not there."""
+    for position in range(len(ids)):
+        if ids[position] == booking_id:
+            return position
+    return 0
+
+
+def show_revise(clicked_id):
+    """Move a performance to another stage or time, or take it out of the lineup (FA04)."""
+    ids = booked_ids()
+    if len(ids) == 0:
+        return
+
+    # the block just clicked in the timetable is the one the form opens on
+    booking_id = st.selectbox("Performance", ids, index=position_of(clicked_id, ids),
+                              format_func=booking_label)
+    booking = logic.get_booking(booking_id)
+
+    with st.form("edit_booking"):
+        stage_id = st.selectbox("Move to stage", stage_ids(),
+                                index=position_of(booking["stage_id"], stage_ids()),
+                                format_func=stage_label)
+        picked = st.time_input("Move to start time", value=clock_value(booking["start_time"]),
+                               step=300)
+        start_time = logic.to_time_text(picked.hour * 60 + picked.minute)
+        move, remove = st.columns(2)
+        moved = move.form_submit_button("Move performance", use_container_width=True)
+        removed = remove.form_submit_button("Remove from lineup", use_container_width=True)
+
+    if moved:
+        refusal = logic.edit_booking(booking_id, stage_id, start_time)
+        if refusal == "":
+            remember_message(booking_label(booking_id) + " — moved.")
+            redraw_calendar()
+            st.rerun()
+        else:
+            st.warning(refusal)
+    if removed:
+        name = logic.get_artist(booking["artist_id"])["name"]
+        refusal = logic.remove_booking(booking_id)
+        if refusal == "":
+            remember_message(name + " is out of the lineup. The fee is back in the budget.")
+            redraw_calendar()
+            st.rerun()
+        else:
+            st.warning(refusal)
+
+
+def dragged_change(payload):
+    """Return (booking_id, stage_id, start_time) when a block was dragged, or None.
+
+    The calendar reports the block's new position; it is a request, not a decision.
+    """
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("callback") != "eventChange":
+        return None
+    event = payload.get("eventChange", {}).get("event", {})
+    booking_id = event.get("id")
+    stage_id = event.get("resourceId")
+    starts_at = event.get("start", "")
+    if booking_id is None or stage_id is None or "T" not in starts_at:
+        return None
+    # "2026-06-20T16:30:00+00:00" -> "16:30"
+    return booking_id, str(stage_id), starts_at.split("T")[1][:5]
+
+
+def calendar_version():
+    """Return which drawing of the calendar we are on."""
+    if "calendar_version" in st.session_state:
+        return st.session_state["calendar_version"]
+    return 0
+
+
+def redraw_calendar():
+    """Draw the calendar from scratch, so a refused drag snaps back to where it was."""
+    st.session_state["calendar_version"] = calendar_version() + 1
+
+
+def remember_refusal(text):
+    """Keep a refusal so it survives the redraw that puts the block back."""
+    st.session_state["refusal"] = text
+
+
+def show_remembered_refusal():
+    """Print the refusal left by the last rejected drag, once."""
+    if "refusal" in st.session_state:
+        st.warning(st.session_state["refusal"])
+        del st.session_state["refusal"]
+
+
+def apply_dragged_change(payload):
+    """Ask logic to accept a dragged block, and say so when it refuses (FA04)."""
+    change = dragged_change(payload)
+    if change is None:
+        return
+    booking_id, stage_id, start_time = change
+
+    booking = logic.get_booking(booking_id)
+    if booking is None:
+        return
+    if booking["stage_id"] == stage_id and booking["start_time"] == start_time:
+        # the calendar is only telling us where the block already is
+        return
+
+    refusal = logic.edit_booking(booking_id, stage_id, start_time)
+    if refusal == "":
+        remember_message(booking_label(booking_id) + " — moved.")
+    else:
+        remember_refusal(refusal)
+    redraw_calendar()
+    st.rerun()
+
+
+def cancel_performance(booking_id):
+    """Take the performance showing in the detail panel out of the lineup (FA04)."""
+    booking = logic.get_booking(booking_id)
+    if booking is None:
+        return
+    name = logic.get_artist(booking["artist_id"])["name"]
+
+    refusal = logic.remove_booking(booking_id)
+    if refusal == "":
+        remember_message(name + " is out of the lineup. The fee is back in the budget.")
+    else:
+        remember_refusal(refusal)
+    redraw_calendar()
+    st.rerun()
 
 
 def clicked_booking_id(clicked):
@@ -290,9 +457,10 @@ def show_clicked_performance(clicked):
     booking_id = clicked_booking_id(clicked)
 
     if booking_id is None:
-        with st.container(border=True, height=DETAIL_HEIGHT):
+        with st.container(border=True):
             st.markdown("#### The performance")
-            st.caption("Click a block in the timetable to see the artist behind it.")
+            st.caption("Click a block in the timetable to see the artist behind it, "
+                       "and to cancel it.")
         return
 
     booking = logic.get_booking(booking_id)
@@ -300,15 +468,22 @@ def show_clicked_performance(clicked):
         return
     artist = logic.get_artist(booking["artist_id"])
 
-    with st.container(border=True, height=DETAIL_HEIGHT):
+    with st.container(border=True):
         st.markdown("#### " + artist["name"])
         st.caption(artist["genre"])
-        st.divider()
+
+        # One fact per row: a stage name or a time is too long to share a line.
         st.metric("Plays", booking["start_time"] + "–"
                   + logic.end_time(artist["id"], booking["start_time"]))
         st.metric("Stage", logic.stage_name(booking["stage_id"]))
         st.metric("Set length", artist["duration_min"] + " min")
         st.metric("Fee", artist["fee"] + " €")
+        style_metric_cards(background_color=WARM_SAND, border_left_color=STAGE_COLOURS[1],
+                           border_color=WARM_SAND, box_shadow=False)
+
+        if st.button("Cancel this performance", key="cancel_" + booking["id"],
+                     use_container_width=True):
+            cancel_performance(booking["id"])
 
 
 def show_lineup_as_a_list():

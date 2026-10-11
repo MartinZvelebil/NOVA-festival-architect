@@ -242,13 +242,49 @@ def add_booking(artist_id, stage_id, start_time):
 
 
 def edit_booking(booking_id, stage_id, start_time):
-    """Move a performance to another stage or start time, or refuse and say why (FA04)."""
-    raise NotImplementedError("FA04: not built yet")
+    """Move a performance to another stage or start time, or refuse and say why (FA04).
+
+    An edit replaces the booking rather than adding one (FA R5): the artist stays the same,
+    the fee is charged once, and the booking being moved is ignored while looking for clashes,
+    so a set never clashes with itself.
+    """
+    booking = get_booking(booking_id)
+    if booking is None:
+        return "That performance is not in the lineup."
+
+    refusal = check_booking(booking["artist_id"], stage_id, start_time, booking_id=booking_id)
+    if refusal != "":
+        # Nothing is written when we refuse: the performance stays where it was.
+        return refusal
+
+    bookings = all_bookings()
+    for position in range(len(bookings)):
+        if bookings[position]["id"] == str(booking_id):
+            bookings[position] = {
+                "id": booking["id"],
+                "artist_id": booking["artist_id"],
+                "stage_id": str(stage_id),
+                "start_time": start_time,
+            }
+    db.save_table("bookings", bookings)
+    return ""
 
 
 def remove_booking(booking_id):
-    """Take a performance out of the lineup, releasing its slot and its fee (FA04)."""
-    raise NotImplementedError("FA04: not built yet")
+    """Take a performance out of the lineup, releasing its slot and its fee (FA04).
+
+    The fee is not stored anywhere, so dropping the row is all it takes: total_fees adds up
+    what is left, and the artist becomes bookable again.
+    """
+    if get_booking(booking_id) is None:
+        return "That performance is not in the lineup."
+
+    remaining = []
+    for booking in all_bookings():
+        if booking["id"] != str(booking_id):
+            remaining.append(booking)
+    db.save_table("bookings", remaining)
+    return ""
 
 
 # ---------- draft and final ----------

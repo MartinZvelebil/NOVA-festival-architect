@@ -150,3 +150,41 @@ def test_anything_that_is_not_a_click_selects_nothing():
     assert app.clicked_booking_id(None) is None
     assert app.clicked_booking_id({}) is None
     assert app.clicked_booking_id({"callback": "datesSet"}) is None
+
+
+# ---------- dragging a performance ----------
+
+def test_a_dragged_block_names_its_new_time_and_stage():
+    """A drag tells us which performance moved, to which stage, and to what time."""
+    import app
+
+    payload = {"callback": "eventChange", "eventChange": {
+        "oldEvent": {"id": "2", "resourceId": "1", "start": "2026-06-20T17:00:00+00:00"},
+        "event": {"id": "2", "resourceId": "2", "start": "2026-06-20T16:30:00+00:00"},
+    }}
+    assert app.dragged_change(payload) == ("2", "2", "16:30")
+
+
+def test_anything_that_is_not_a_drag_moves_nothing():
+    """Clicks and view changes are not drags, and half a payload is not one either."""
+    import app
+
+    assert app.dragged_change(None) is None
+    assert app.dragged_change({"callback": "eventClick"}) is None
+    assert app.dragged_change({"callback": "eventChange", "eventChange": {"event": {}}}) is None
+
+
+def test_a_drag_is_only_a_request(tmp_path, monkeypatch):
+    """What the calendar reports still has to pass the rules: a clash is refused."""
+    use_temp_data(tmp_path, monkeypatch)
+    save_catalogue([
+        make_artist("1", duration_min="60"),
+        make_artist("2", duration_min="45"),
+    ])
+    logic.add_booking("1", "1", "16:00")
+    logic.add_booking("2", "1", "17:00")
+    second = logic.timetable("1")[1]["booking_id"]
+
+    # the same move a drag onto 16:30 would ask for
+    assert logic.edit_booking(second, "1", "16:30") != ""
+    assert logic.get_booking(second)["start_time"] == "17:00"
