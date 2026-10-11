@@ -260,6 +260,16 @@ def cancel_performance(booking_id):
 
 # ---------- the sidebar: the plan and the money ----------
 
+def style_the_metric_cards():
+    """Give every metric on the page its card. One call styles them all, wherever they are.
+
+    It injects a stylesheet, so it has to run on every draw, not only when a performance
+    happens to be selected.
+    """
+    style_metric_cards(background_color=WARM_SAND, border_left_color=STAGE_COLOURS[1],
+                       border_color=WARM_SAND, box_shadow=False)
+
+
 def show_sidebar():
     """The plan's status and the budget, shared by everything on the page."""
     st.sidebar.title("Festival Architect")
@@ -349,8 +359,6 @@ def show_performance(booking_id):
         st.metric("Stage", logic.stage_name(booking["stage_id"]))
         st.metric("Set length", artist["duration_min"] + " min")
         st.metric("Fee", artist["fee"] + " €")
-        style_metric_cards(background_color=WARM_SAND, border_left_color=STAGE_COLOURS[1],
-                           border_color=WARM_SAND, box_shadow=False)
         if not logic.is_final():
             if st.button("Cancel this performance", key="cancel_" + booking["id"],
                          use_container_width=True):
@@ -463,3 +471,4 @@ with panel_column:
     show_panel(reported)
 
 show_catalogue()
+style_the_metric_cards()

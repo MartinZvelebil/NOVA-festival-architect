@@ -169,3 +169,20 @@ def test_the_page_is_the_same_after_a_restart(tmp_path, monkeypatch):
     app = open_app()
     assert not app.exception
     assert [logic.timetable("1"), logic.timetable("2"), logic.total_fees()] == before
+
+
+def test_the_metric_cards_are_styled_from_the_first_draw(tmp_path, monkeypatch):
+    """The budget cards look the same before anything is clicked as they do afterwards.
+
+    The styling is a stylesheet the page injects, so it has to be there on the very first
+    draw, not only once a performance happens to be selected.
+    """
+    use_temp_data(tmp_path, monkeypatch)
+    save_catalogue([make_artist("1", duration_min="60")])
+
+    app = open_app()
+    styles = []
+    for block in app.get("html"):
+        if "metric-container" in block.body:
+            styles.append(block.body)
+    assert len(styles) == 1
