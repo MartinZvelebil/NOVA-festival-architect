@@ -2,12 +2,24 @@
 from datetime import time
 
 import streamlit as st
+from streamlit_calendar import calendar
+from streamlit_extras.metric_cards import style_metric_cards
 
 import logic
 
 SCREENS = ["Book an artist", "The lineup"]
 CARDS_PER_ROW = 4
 CARD_HEIGHT = 190
+
+# The two stage colours from CLAUDE.md, in stage order. A colour always means a stage.
+STAGE_COLOURS = ["#865D36", "#4A5D3A"]
+SOIL = "#3E362E"
+PAPER = "#F3EADF"
+WARM_SAND = "#AC8968"
+
+# The brief describes one festival day but never dates it. The calendar needs some date to
+# draw, so we pick one; nothing is stored against it and no rule ever reads it.
+FESTIVAL_DAY = "2026-06-20"
 
 
 # ---------- small helpers ----------
@@ -117,9 +129,69 @@ def stage_ids():
 
 def show_budget():
     """The two numbers that must agree with the lineup after every accepted change."""
-    left, right = st.columns(2)
-    left.metric("Artist fees", str(logic.total_fees()) + " €")
+    left, middle, right = st.columns(3)
+    left.metric("Artists booked", len(logic.all_bookings()))
+    middle.metric("Artist fees", str(logic.total_fees()) + " €")
     right.metric("Budget left", str(logic.remaining_budget()) + " €")
+    style_metric_cards(background_color=WARM_SAND, border_left_color=STAGE_COLOURS[1],
+                       border_color=WARM_SAND, box_shadow=False)
+
+
+def stage_colour(stage_id):
+    """Return the colour of one stage, by its position in the stages table."""
+    stages = logic.all_stages()
+    for position in range(len(stages)):
+        if stages[position]["id"] == str(stage_id):
+            return STAGE_COLOURS[position % len(STAGE_COLOURS)]
+    return STAGE_COLOURS[0]
+
+
+def calendar_events():
+    """Turn every performance into one block the calendar can draw."""
+    events = []
+    for stage in logic.all_stages():
+        for performance in logic.timetable(stage["id"]):
+            events.append({
+                "title": performance["name"],
+                "start": FESTIVAL_DAY + "T" + performance["start_time"] + ":00",
+                "end": FESTIVAL_DAY + "T" + performance["end_time"] + ":00",
+                "resourceId": stage["id"],
+                "backgroundColor": stage_colour(stage["id"]),
+                "borderColor": stage_colour(stage["id"]),
+                "textColor": PAPER,
+            })
+    return events
+
+
+def calendar_options():
+    """Describe the day the calendar draws: one column per stage, opening time to closing time."""
+    resources = []
+    for stage in logic.all_stages():
+        resources.append({"id": stage["id"], "title": stage["name"]})
+    return {
+        "initialView": "resourceTimeGridDay",
+        "initialDate": FESTIVAL_DAY,
+        "slotMinTime": logic.opens() + ":00",
+        "slotMaxTime": logic.closes() + ":00",
+        "slotDuration": "00:30:00",
+        "allDaySlot": False,
+        "headerToolbar": {"left": "", "center": "", "right": ""},
+        "height": 620,
+        "editable": False,
+        "resources": resources,
+    }
+
+
+CALENDAR_CSS = """
+    .fc { background-color: #AC8968; border-radius: 10px; padding: 8px; }
+    .fc a { color: #3E362E; }
+    .fc .fc-col-header-cell-cushion { color: #3E362E; font-weight: 700;
+        text-transform: uppercase; letter-spacing: .12em; font-size: .8em; }
+    .fc .fc-timegrid-slot-label-cushion { color: #3E362E; opacity: .7; font-size: .8em; }
+    .fc-theme-standard td, .fc-theme-standard th,
+    .fc-theme-standard .fc-scrollgrid { border-color: rgba(62,54,46,.22); }
+    .fc-event-title { font-weight: 700; }
+"""
 
 
 # ---------- screen 1: book an artist ----------
@@ -167,28 +239,31 @@ def show_booking():
 # ---------- screen 2: the lineup ----------
 
 def show_lineup():
-    """Every booked performance, one stage after another. Task 3 turns this into a timetable."""
+    """The festival day as a calendar: one column per stage, opening time to closing time."""
     st.title("The lineup")
     show_budget()
 
-    bookings = logic.all_bookings()
-    if len(bookings) == 0:
+    if len(logic.all_bookings()) == 0:
         st.caption("Nothing booked yet. Add a performance first.")
         return
 
+    calendar(events=calendar_events(), options=calendar_options(),
+             custom_css=CALENDAR_CSS, key="timetable")
+
+    with st.expander("The same lineup as a list"):
+        show_lineup_as_a_list()
+
+
+def show_lineup_as_a_list():
+    """Every performance in words, so the timetable can be checked against the data by hand."""
     for stage in logic.all_stages():
         st.subheader(stage["name"])
-        playing = False
-        for booking in bookings:
-            if booking["stage_id"] != stage["id"]:
-                continue
-            playing = True
-            artist = logic.get_artist(booking["artist_id"])
-            ends = logic.end_time(artist["id"], booking["start_time"])
-            st.markdown("**" + booking["start_time"] + "–" + ends + "** · "
-                        + artist["name"] + " · " + artist["genre"])
-        if not playing:
+        performances = logic.timetable(stage["id"])
+        if len(performances) == 0:
             st.caption("Nothing on this stage yet.")
+        for performance in performances:
+            st.markdown("**" + performance["start_time"] + "–" + performance["end_time"]
+                        + "** · " + performance["name"] + " · " + performance["genre"])
 
 
 # ---------- this part runs on every click ----------

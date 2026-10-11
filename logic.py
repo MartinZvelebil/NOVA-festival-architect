@@ -114,8 +114,27 @@ def get_booking(booking_id):
 
 
 def timetable(stage_id):
-    """Return one stage's performances in time order, each with artist name, start and end (FA03)."""
-    raise NotImplementedError("FA03: not built yet")
+    """Return one stage's performances in time order, each with artist name, start and end (FA03).
+
+    Built from the saved bookings every time it is called, so the timetable and the budget
+    are always two views of the same rows and cannot drift apart.
+    """
+    performances = []
+    for booking in all_bookings():
+        if booking["stage_id"] != str(stage_id):
+            continue
+        artist = get_artist(booking["artist_id"])
+        performances.append({
+            "booking_id": booking["id"],
+            "artist_id": artist["id"],
+            "name": artist["name"],
+            "genre": artist["genre"],
+            "start_time": booking["start_time"],
+            "end_time": end_time(artist["id"], booking["start_time"]),
+        })
+    # sorted by the real minute, not by the text: "9:00" would otherwise come after "14:00"
+    performances.sort(key=lambda performance: to_minutes(performance["start_time"]))
+    return performances
 
 
 # ---------- the budget ----------
