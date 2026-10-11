@@ -119,8 +119,8 @@ def test_the_timetable_survives_a_restart(tmp_path, monkeypatch):
     assert after == before
 
 
-def test_the_lineup_screen_renders(tmp_path, monkeypatch):
-    """The timetable screen runs from top to bottom without raising."""
+def test_the_page_with_the_timetable_renders(tmp_path, monkeypatch):
+    """The one screen runs from top to bottom without raising, with a lineup on it."""
     use_temp_data(tmp_path, monkeypatch)
     save_catalogue([make_artist("1", duration_min="60")])
     logic.add_booking("1", "1", "16:00")
@@ -128,9 +128,8 @@ def test_the_lineup_screen_renders(tmp_path, monkeypatch):
     from streamlit.testing.v1 import AppTest
     app = AppTest.from_file(APP_FILE)
     app.run()
-    app.sidebar.radio[0].set_value("The lineup").run()
     assert not app.exception
-    assert app.title[0].value == "The lineup"
+    assert app.title[0].value == "The festival"
 
 
 # ---------- clicking a performance ----------

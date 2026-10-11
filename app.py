@@ -1,4 +1,8 @@
-"""Festival Architect: every screen of the app lives here. Start it with `uv run streamlit run app.py`."""
+"""Festival Architect: the whole planner on one screen.
+
+Start it with `uv run streamlit run app.py`. Everything here is presentation: the rules,
+the money and the timetable all come from logic.py.
+"""
 from datetime import time
 
 import streamlit as st
@@ -7,13 +11,10 @@ from streamlit_extras.metric_cards import style_metric_cards
 
 import logic
 
-SCREENS = ["Book an artist", "The lineup"]
 CARDS_PER_ROW = 4
-CARD_HEIGHT = 190
 
 # The two stage colours from CLAUDE.md, in stage order. A colour always means a stage.
 STAGE_COLOURS = ["#865D36", "#4A5D3A"]
-SOIL = "#3E362E"
 PAPER = "#F3EADF"
 WARM_SAND = "#AC8968"
 
@@ -22,156 +23,63 @@ WARM_SAND = "#AC8968"
 FESTIVAL_DAY = "2026-06-20"
 
 
+# ---------- what the organiser is holding ----------
 
-# ---------- small helpers ----------
-
-def artist_label(artist_id):
-    """Turn an artist id into the text shown in the artist picker."""
-    artist = logic.get_artist(artist_id)
-    return artist["name"] + " — " + artist["genre"]
-
-
-def stage_label(stage_id):
-    """Turn a stage id into the stage's name."""
-    return logic.stage_name(stage_id)
-
-
-def chosen_artist_id():
-    """Return the artist the organiser clicked in the catalogue, or None if they clicked none."""
-    if "chosen_artist" in st.session_state:
-        return st.session_state["chosen_artist"]
+def armed_artist_id():
+    """Return the artist picked up from the catalogue, or None when none is held."""
+    if "armed_artist" in st.session_state:
+        return st.session_state["armed_artist"]
     return None
 
 
-def choose_artist(artist_id):
-    """Remember which artist was clicked, so the form below opens on that artist."""
-    st.session_state["chosen_artist"] = artist_id
+def arm_artist(artist_id):
+    """Pick an artist up, or put them down again when they are already held."""
+    if armed_artist_id() == artist_id:
+        del st.session_state["armed_artist"]
+    else:
+        st.session_state["armed_artist"] = artist_id
 
+
+def disarm_artist():
+    """Put down whoever is held, after they are booked."""
+    if "armed_artist" in st.session_state:
+        del st.session_state["armed_artist"]
+
+
+# ---------- messages that survive a redraw ----------
 
 def remember_message(text):
-    """Keep a message so it survives the redraw that follows an accepted booking."""
+    """Keep a message so it survives the redraw that follows an accepted change."""
     st.session_state["message"] = text
 
 
-def show_remembered_message():
-    """Print the message left by the last accepted booking, once."""
+def remember_refusal(text):
+    """Keep a refusal so it survives the redraw that puts things back."""
+    st.session_state["refusal"] = text
+
+
+def show_messages():
+    """Print whatever the last change left behind, once."""
     if "message" in st.session_state:
         st.success(st.session_state["message"])
         del st.session_state["message"]
+    if "refusal" in st.session_state:
+        st.warning(st.session_state["refusal"])
+        del st.session_state["refusal"]
 
 
-def forget_artist():
-    """Drop the remembered choice, after a booking is made or the artist is gone."""
-    if "chosen_artist" in st.session_state:
-        del st.session_state["chosen_artist"]
+# ---------- the calendar ----------
 
-
-def show_artist_card(artist, column):
-    """Draw one artist as a card. Clicking it picks that artist in the form below.
-
-    Every card carries a button, booked or not, so all the cards in a row are the same height.
-    A booked artist's button is greyed out and says so.
-    """
-    booked = logic.is_booked(artist["id"])
-    # A fixed height keeps every card in the row the same size, whether or not the
-    # artist's name wraps onto a second line.
-    with column.container(border=True, height=CARD_HEIGHT):
-        if booked:
-            # grey, so a card you cannot pick looks different before you read it
-            st.markdown("#### :grey[" + artist["name"] + "]")
-            st.caption(artist["genre"] + " · " + artist["fee"] + " € · "
-                       + artist["duration_min"] + " min")
-            st.button("Already playing", key="pick_" + artist["id"], disabled=True,
-                      use_container_width=True)
-        else:
-            st.markdown("#### " + artist["name"])
-            st.caption(artist["genre"] + " · **" + artist["fee"] + " €** · "
-                       + artist["duration_min"] + " min")
-            chosen = artist["id"] == chosen_artist_id()
-            st.button("Chosen" if chosen else "Choose", key="pick_" + artist["id"],
-                      disabled=chosen, use_container_width=True,
-                      type="primary" if chosen else "secondary",
-                      on_click=choose_artist, args=(artist["id"],))
-
-
-def free_artist_ids():
-    """Return the ids of the artists that are not in the lineup yet."""
-    ids = []
-    for artist in logic.all_artists():
-        if not logic.is_booked(artist["id"]):
-            ids.append(artist["id"])
-    return ids
-
-
-def clock_value(time_text):
-    """Turn a stored time like '16:30' into the clock value a time picker wants."""
-    minutes = logic.to_minutes(time_text)
-    return time(minutes // 60, minutes % 60)
-
-
-def opening_time():
-    """Return the festival's opening time as a clock value, for the time picker's default."""
-    return clock_value(logic.opens())
-
-
-def chosen_position(free):
-    """Return where the clicked artist sits in the picker, or 0 when nothing was clicked."""
-    chosen = chosen_artist_id()
-    for position in range(len(free)):
-        if free[position] == chosen:
-            return position
+def calendar_version():
+    """Return which drawing of the calendar we are on."""
+    if "calendar_version" in st.session_state:
+        return st.session_state["calendar_version"]
     return 0
 
 
-def stage_ids():
-    """Return the ids of every stage."""
-    ids = []
-    for stage in logic.all_stages():
-        ids.append(stage["id"])
-    return ids
-
-
-# ---------- the money ----------
-
-def show_plan_status():
-    """Say whether the plan is a draft or final, and offer the way across (FA05)."""
-    if logic.is_final():
-        with st.container(border=True):
-            left, right = st.columns([3, 1])
-            left.markdown("**This lineup is final.** It cannot be changed until you reopen it.")
-            if right.button("Reopen as draft", use_container_width=True):
-                logic.reopen_plan()
-                remember_message("The plan is a draft again. You can change the lineup.")
-                redraw_calendar()
-                st.rerun()
-        return
-
-    refusal = logic.can_finalise()
-    with st.container(border=True):
-        left, right = st.columns([3, 1])
-        if refusal == "":
-            left.markdown("**This lineup is a draft.** Everything is in place to make it final.")
-        else:
-            left.markdown("**This lineup is a draft.** " + refusal)
-        if right.button("Finalise the lineup", use_container_width=True,
-                        disabled=refusal != "", type="primary"):
-            problem = logic.finalise_plan()
-            if problem == "":
-                remember_message("The lineup is final.")
-            else:
-                remember_refusal(problem)
-            redraw_calendar()
-            st.rerun()
-
-
-def show_budget():
-    """The two numbers that must agree with the lineup after every accepted change."""
-    left, middle, right = st.columns(3)
-    left.metric("Artists booked", len(logic.all_bookings()))
-    middle.metric("Artist fees", str(logic.total_fees()) + " €")
-    right.metric("Budget left", str(logic.remaining_budget()) + " €")
-    style_metric_cards(background_color=WARM_SAND, border_left_color=STAGE_COLOURS[1],
-                       border_color=WARM_SAND, box_shadow=False)
+def redraw_calendar():
+    """Draw the calendar from scratch, so a refused change snaps back to where it was."""
+    st.session_state["calendar_version"] = calendar_version() + 1
 
 
 def stage_colour(stage_id):
@@ -209,12 +117,13 @@ def calendar_options():
     return {
         "initialView": "resourceTimeGridDay",
         "initialDate": FESTIVAL_DAY,
+        # The times we send are wall-clock times with no zone. Pinning the calendar to UTC
+        # keeps it that way, so a clicked slot comes back as the time the organiser saw.
+        "timeZone": "UTC",
         "slotMinTime": logic.opens() + ":00",
         "slotMaxTime": logic.closes() + ":00",
         "slotDuration": "00:30:00",
-        # the grid shows half hours, but a dragged block lands on the nearest quarter
         "snapDuration": "00:15:00",
-        # A half-hour slot needs real height, or a 40-minute set clips its own name.
         "slotMinHeight": 46,
         "expandRows": True,
         "eventTimeFormat": {"hour": "2-digit", "minute": "2-digit", "hour12": False},
@@ -222,12 +131,12 @@ def calendar_options():
         "allDaySlot": False,
         "headerToolbar": {"left": "", "center": "", "right": ""},
         "height": 760,
-        # Blocks can be dragged to another time or stage; every drag still goes through
-        # logic.edit_booking, so the rules decide. Length belongs to the artist, so no resizing.
+        # A final plan cannot be dragged. Set lengths belong to the artist, so never resizable.
         "editable": not logic.is_final(),
-        "eventStartEditable": True,
+        "eventStartEditable": not logic.is_final(),
         "eventDurationEditable": False,
         "eventResizableFromStart": False,
+        "selectable": False,
         "resources": resources,
     }
 
@@ -248,160 +157,34 @@ CALENDAR_CSS = """
 """
 
 
-# ---------- screen 1: book an artist ----------
+# ---------- reading what the calendar reports ----------
 
-def show_booking():
-    """Catalogue plus the form that adds one performance to the lineup."""
-    st.title("Book an artist")
-    show_remembered_message()
-    show_budget()
-
-    st.subheader("The catalogue")
-    artists = logic.all_artists()
-    # One st.columns per row, not one for the whole catalogue: a row of columns is only as
-    # tall as its own cards, so a long artist name cannot push the row below it out of line.
-    for first in range(0, len(artists), CARDS_PER_ROW):
-        row = artists[first:first + CARDS_PER_ROW]
-        columns = st.columns(CARDS_PER_ROW)
-        for position in range(len(row)):
-            show_artist_card(row[position], columns[position])
-
-    st.subheader("Add a performance")
-    if logic.is_final():
-        st.info("The lineup is final. Reopen it as a draft on the lineup screen to book more.")
-        return
-    free = free_artist_ids()
-    if len(free) == 0:
-        st.caption("Every artist in the catalogue is already playing.")
-        return
-
-    with st.form("add_booking"):
-        artist_id = st.selectbox("Artist", free, index=chosen_position(free),
-                                 format_func=artist_label)
-        stage_id = st.selectbox("Stage", stage_ids(), format_func=stage_label)
-        picked = st.time_input("Start time", value=opening_time(), step=300)
-        start_time = logic.to_time_text(picked.hour * 60 + picked.minute)
-        if st.form_submit_button("Add performance"):
-            refusal = logic.add_booking(artist_id, stage_id, start_time)
-            if refusal == "":
-                forget_artist()
-                remember_message(logic.get_artist(artist_id)["name"] + " plays at "
-                                 + start_time + " on " + logic.stage_name(stage_id) + ".")
-                # redraw, so the catalogue and the budget show the booking we just made
-                st.rerun()
-            else:
-                st.warning(refusal)
+def clicked_booking_id(payload):
+    """Return the booking id of the block that was clicked, or None if none was."""
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("callback") != "eventClick":
+        return None
+    return payload.get("eventClick", {}).get("event", {}).get("id")
 
 
-# ---------- screen 2: the lineup ----------
-
-def show_lineup():
-    """The festival day as a calendar: one column per stage, opening time to closing time."""
-    st.title("The lineup")
-    show_remembered_message()
-    show_remembered_refusal()
-    show_plan_status()
-    show_budget()
-    if logic.is_final():
-        st.caption("Click a performance to see the artist behind it.")
-    else:
-        st.caption("Drag a performance to another time or stage. "
-                   "Click one to see the artist behind it.")
-
-    if len(logic.all_bookings()) == 0:
-        st.caption("Nothing booked yet. Add a performance first.")
-        return
-
-    # The calendar on the left, the detail of whatever was clicked on the right, so a click
-    # always has a visible effect without the organiser having to scroll to find it.
-    timetable_column, detail_column = st.columns([3, 1])
-    with timetable_column:
-        clicked = calendar(events=calendar_events(), options=calendar_options(),
-                           custom_css=CALENDAR_CSS,
-                           key="timetable-" + str(calendar_version()))
-        apply_dragged_change(clicked)
-    with detail_column:
-        show_clicked_performance(clicked)
-
-    if not logic.is_final():
-        with st.expander("Change a performance by hand"):
-            show_revise(clicked_booking_id(clicked))
-
-    with st.expander("The same lineup as a list"):
-        show_lineup_as_a_list()
-
-
-def booking_label(booking_id):
-    """Turn a booking id into the text shown in the performance picker."""
-    booking = logic.get_booking(booking_id)
-    artist = logic.get_artist(booking["artist_id"])
-    return (artist["name"] + " · " + logic.stage_name(booking["stage_id"])
-            + " · " + booking["start_time"])
-
-
-def booked_ids():
-    """Return the ids of every performance in the lineup, in time order within each stage."""
-    ids = []
-    for stage in logic.all_stages():
-        for performance in logic.timetable(stage["id"]):
-            ids.append(performance["booking_id"])
-    return ids
-
-
-def position_of(booking_id, ids):
-    """Return where a performance sits in the picker, or 0 when it is not there."""
-    for position in range(len(ids)):
-        if ids[position] == booking_id:
-            return position
-    return 0
-
-
-def show_revise(clicked_id):
-    """Move a performance to another stage or time, or take it out of the lineup (FA04)."""
-    ids = booked_ids()
-    if len(ids) == 0:
-        return
-
-    # the block just clicked in the timetable is the one the form opens on
-    booking_id = st.selectbox("Performance", ids, index=position_of(clicked_id, ids),
-                              format_func=booking_label)
-    booking = logic.get_booking(booking_id)
-
-    with st.form("edit_booking"):
-        stage_id = st.selectbox("Move to stage", stage_ids(),
-                                index=position_of(booking["stage_id"], stage_ids()),
-                                format_func=stage_label)
-        picked = st.time_input("Move to start time", value=clock_value(booking["start_time"]),
-                               step=300)
-        start_time = logic.to_time_text(picked.hour * 60 + picked.minute)
-        move, remove = st.columns(2)
-        moved = move.form_submit_button("Move performance", use_container_width=True)
-        removed = remove.form_submit_button("Remove from lineup", use_container_width=True)
-
-    if moved:
-        refusal = logic.edit_booking(booking_id, stage_id, start_time)
-        if refusal == "":
-            remember_message(booking_label(booking_id) + " — moved.")
-            redraw_calendar()
-            st.rerun()
-        else:
-            st.warning(refusal)
-    if removed:
-        name = logic.get_artist(booking["artist_id"])["name"]
-        refusal = logic.remove_booking(booking_id)
-        if refusal == "":
-            remember_message(name + " is out of the lineup. The fee is back in the budget.")
-            redraw_calendar()
-            st.rerun()
-        else:
-            st.warning(refusal)
+def clicked_slot(payload):
+    """Return (stage_id, start_time) of the empty slot that was clicked, or None."""
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("callback") != "dateClick":
+        return None
+    click = payload.get("dateClick", {})
+    stage_id = click.get("resource", {}).get("id")
+    clicked_at = click.get("date", "")
+    if stage_id is None or "T" not in clicked_at:
+        return None
+    # "2026-06-20T15:30:00.000Z" -> "15:30"
+    return str(stage_id), clicked_at.split("T")[1][:5]
 
 
 def dragged_change(payload):
-    """Return (booking_id, stage_id, start_time) when a block was dragged, or None.
-
-    The calendar reports the block's new position; it is a request, not a decision.
-    """
+    """Return (booking_id, stage_id, start_time) when a block was dragged, or None."""
     if not isinstance(payload, dict):
         return None
     if payload.get("callback") != "eventChange":
@@ -412,33 +195,10 @@ def dragged_change(payload):
     starts_at = event.get("start", "")
     if booking_id is None or stage_id is None or "T" not in starts_at:
         return None
-    # "2026-06-20T16:30:00+00:00" -> "16:30"
     return booking_id, str(stage_id), starts_at.split("T")[1][:5]
 
 
-def calendar_version():
-    """Return which drawing of the calendar we are on."""
-    if "calendar_version" in st.session_state:
-        return st.session_state["calendar_version"]
-    return 0
-
-
-def redraw_calendar():
-    """Draw the calendar from scratch, so a refused drag snaps back to where it was."""
-    st.session_state["calendar_version"] = calendar_version() + 1
-
-
-def remember_refusal(text):
-    """Keep a refusal so it survives the redraw that puts the block back."""
-    st.session_state["refusal"] = text
-
-
-def show_remembered_refusal():
-    """Print the refusal left by the last rejected drag, once."""
-    if "refusal" in st.session_state:
-        st.warning(st.session_state["refusal"])
-        del st.session_state["refusal"]
-
+# ---------- acting on what the calendar reports ----------
 
 def apply_dragged_change(payload):
     """Ask logic to accept a dragged block, and say so when it refuses (FA04)."""
@@ -456,7 +216,26 @@ def apply_dragged_change(payload):
 
     refusal = logic.edit_booking(booking_id, stage_id, start_time)
     if refusal == "":
-        remember_message(booking_label(booking_id) + " — moved.")
+        remember_message(logic.get_artist(booking["artist_id"])["name"] + " moved.")
+    else:
+        remember_refusal(refusal)
+    redraw_calendar()
+    st.rerun()
+
+
+def place_armed_artist(payload):
+    """Book whoever is held into the slot that was clicked: two clicks, one performance."""
+    artist_id = armed_artist_id()
+    slot = clicked_slot(payload)
+    if artist_id is None or slot is None:
+        return
+    stage_id, start_time = slot
+
+    refusal = logic.add_booking(artist_id, stage_id, start_time)
+    if refusal == "":
+        remember_message(logic.get_artist(artist_id)["name"] + " plays at " + start_time
+                         + " on " + logic.stage_name(stage_id) + ".")
+        disarm_artist()
     else:
         remember_refusal(refusal)
     redraw_calendar()
@@ -464,7 +243,7 @@ def apply_dragged_change(payload):
 
 
 def cancel_performance(booking_id):
-    """Take the performance showing in the detail panel out of the lineup (FA04)."""
+    """Take a performance out of the lineup (FA04)."""
     booking = logic.get_booking(booking_id)
     if booking is None:
         return
@@ -479,39 +258,92 @@ def cancel_performance(booking_id):
     st.rerun()
 
 
-def clicked_booking_id(clicked):
-    """Return the booking id of the block the organiser clicked, or None if they clicked none."""
-    if not isinstance(clicked, dict):
-        return None
-    if clicked.get("callback") != "eventClick":
-        return None
-    return clicked.get("eventClick", {}).get("event", {}).get("id")
+# ---------- the sidebar: the plan and the money ----------
+
+def show_sidebar():
+    """The plan's status and the budget, shared by everything on the page."""
+    st.sidebar.title("Festival Architect")
+    st.sidebar.caption(logic.opens() + " to " + logic.closes() + " · "
+                       + str(len(logic.all_stages())) + " stages")
+
+    st.sidebar.metric("Artists booked", len(logic.all_bookings()))
+    st.sidebar.metric("Artist fees", str(logic.total_fees()) + " €")
+    st.sidebar.metric("Budget left", str(logic.remaining_budget()) + " €")
+
+    st.sidebar.divider()
+    show_plan_status()
+    st.sidebar.divider()
+    st.sidebar.caption("The plan lives in data/*.csv. Reset it with `uv run python seed.py`.")
 
 
-def show_clicked_performance(clicked):
-    """Show everything about the performance whose block was clicked (FA01, FA03).
-
-    Stands in its own column beside the calendar, so it is on screen before the click happens.
-    """
-    booking_id = clicked_booking_id(clicked)
-
-    if booking_id is None:
-        with st.container(border=True):
-            st.markdown("#### The performance")
-            st.caption("Click a block in the timetable to see the artist behind it, "
-                       "and to cancel it.")
+def show_plan_status():
+    """Say whether the plan is a draft or final, and offer the way across (FA05)."""
+    if logic.is_final():
+        st.sidebar.markdown("**This lineup is final.**")
+        st.sidebar.caption("Nothing can change until you reopen it.")
+        if st.sidebar.button("Reopen as draft", use_container_width=True):
+            logic.reopen_plan()
+            remember_message("The plan is a draft again. You can change the lineup.")
+            redraw_calendar()
+            st.rerun()
         return
 
+    refusal = logic.can_finalise()
+    st.sidebar.markdown("**This lineup is a draft.**")
+    if refusal != "":
+        st.sidebar.caption(refusal)
+    if st.sidebar.button("Finalise the lineup", use_container_width=True,
+                         disabled=refusal != "", type="primary"):
+        problem = logic.finalise_plan()
+        if problem == "":
+            remember_message("The lineup is final.")
+        else:
+            remember_refusal(problem)
+        redraw_calendar()
+        st.rerun()
+
+
+# ---------- the right-hand panel ----------
+
+def show_panel(payload):
+    """Whatever the organiser last clicked: a performance, a free slot, or nothing yet."""
+    booking_id = clicked_booking_id(payload)
+    if booking_id is not None and logic.get_booking(booking_id) is not None:
+        show_performance(booking_id)
+        return
+
+    slot = clicked_slot(payload)
+    if slot is not None and not logic.is_final():
+        show_slot_form(slot)
+        return
+
+    show_hint()
+
+
+def show_hint():
+    """What to do, for an organiser who has not clicked anything yet."""
+    with st.container(border=True):
+        st.markdown("#### The performance")
+        if logic.is_final():
+            st.caption("Click a performance to see the artist behind it.")
+            return
+        held = armed_artist_id()
+        if held is None:
+            st.caption("Pick an artist below, then click a free slot to book them. "
+                       "Click a performance to see it, or drag it to move it.")
+        else:
+            st.caption("Holding **" + logic.get_artist(held)["name"]
+                       + "**. Click a free slot in the timetable to book them.")
+
+
+def show_performance(booking_id):
+    """Everything about one performance, and the way to cancel it (FA01, FA04)."""
     booking = logic.get_booking(booking_id)
-    if booking is None:
-        return
     artist = logic.get_artist(booking["artist_id"])
 
     with st.container(border=True):
         st.markdown("#### " + artist["name"])
         st.caption(artist["genre"])
-
-        # One fact per row: a stage name or a time is too long to share a line.
         st.metric("Plays", booking["start_time"] + "–"
                   + logic.end_time(artist["id"], booking["start_time"]))
         st.metric("Stage", logic.stage_name(booking["stage_id"]))
@@ -519,33 +351,115 @@ def show_clicked_performance(clicked):
         st.metric("Fee", artist["fee"] + " €")
         style_metric_cards(background_color=WARM_SAND, border_left_color=STAGE_COLOURS[1],
                            border_color=WARM_SAND, box_shadow=False)
-
         if not logic.is_final():
             if st.button("Cancel this performance", key="cancel_" + booking["id"],
                          use_container_width=True):
                 cancel_performance(booking["id"])
 
 
-def show_lineup_as_a_list():
-    """Every performance in words, so the timetable can be checked against the data by hand."""
-    for stage in logic.all_stages():
-        st.subheader(stage["name"])
-        performances = logic.timetable(stage["id"])
-        if len(performances) == 0:
-            st.caption("Nothing on this stage yet.")
-        for performance in performances:
-            st.markdown("**" + performance["start_time"] + "–" + performance["end_time"]
-                        + "** · " + performance["name"] + " · " + performance["genre"])
+def show_slot_form(slot):
+    """Book into the slot that was clicked: the stage and the time are already decided (FA02)."""
+    stage_id, start_time = slot
+    free = free_artist_ids()
+
+    with st.container(border=True):
+        st.markdown("#### Book into " + start_time)
+        st.caption(logic.stage_name(stage_id))
+        if len(free) == 0:
+            st.caption("Every artist is already playing.")
+            return
+        with st.form("book_into_slot"):
+            artist_id = st.selectbox("Artist", free, format_func=artist_label)
+            if st.form_submit_button("Add performance", use_container_width=True,
+                                     type="primary"):
+                refusal = logic.add_booking(artist_id, stage_id, start_time)
+                if refusal == "":
+                    remember_message(logic.get_artist(artist_id)["name"] + " plays at "
+                                     + start_time + " on " + logic.stage_name(stage_id) + ".")
+                    disarm_artist()
+                else:
+                    remember_refusal(refusal)
+                redraw_calendar()
+                st.rerun()
+
+
+# ---------- the catalogue ----------
+
+def artist_label(artist_id):
+    """Turn an artist id into the text shown in a picker."""
+    artist = logic.get_artist(artist_id)
+    return artist["name"] + " — " + artist["genre"]
+
+
+def free_artist_ids():
+    """Return the ids of the artists that are not in the lineup yet."""
+    ids = []
+    for artist in logic.all_artists():
+        if not logic.is_booked(artist["id"]):
+            ids.append(artist["id"])
+    return ids
+
+
+def shortfall_text(artist):
+    """Say how far over the remaining budget an artist is, or '' when they fit (FA01)."""
+    over = int(artist["fee"]) - logic.remaining_budget()
+    if over > 0:
+        return str(over) + " € over budget"
+    return ""
+
+
+def show_catalogue():
+    """Every artist, with what they play, what they cost and how long they are on (FA01)."""
+    st.subheader("The catalogue")
+    artists = logic.all_artists()
+    for first in range(0, len(artists), CARDS_PER_ROW):
+        row = artists[first:first + CARDS_PER_ROW]
+        columns = st.columns(CARDS_PER_ROW)
+        for position in range(len(row)):
+            show_artist_card(row[position], columns[position])
+
+
+def show_artist_card(artist, column):
+    """One artist as a card. Clicking it picks the artist up, ready for a free slot."""
+    booked = logic.is_booked(artist["id"])
+    held = artist["id"] == armed_artist_id()
+    over_budget = shortfall_text(artist)
+
+    with column.container(border=True):
+        if booked:
+            st.markdown("#### :grey[" + artist["name"] + "]")
+            st.caption(artist["genre"] + " · " + artist["fee"] + " € · "
+                       + artist["duration_min"] + " min")
+            st.caption("Already playing")
+            return
+
+        st.markdown("#### " + artist["name"])
+        st.caption(artist["genre"] + " · **" + artist["fee"] + " €** · "
+                   + artist["duration_min"] + " min")
+        if over_budget != "":
+            st.caption(":grey[" + over_budget + "]")
+        if logic.is_final():
+            return
+        st.button("Holding" if held else "Pick up", key="arm_" + artist["id"],
+                  use_container_width=True, type="primary" if held else "secondary",
+                  on_click=arm_artist, args=(artist["id"],))
 
 
 # ---------- this part runs on every click ----------
 
 st.set_page_config(page_title="Festival Architect", layout="wide")
-st.sidebar.title("Festival Architect")
-screen = st.sidebar.radio("Screen", SCREENS)
-st.sidebar.caption("The plan lives in data/*.csv. Reset it with `uv run python seed.py`.")
+show_sidebar()
 
-if screen == "Book an artist":
-    show_booking()
-else:
-    show_lineup()
+st.title("The festival")
+show_messages()
+
+timetable_column, panel_column = st.columns([3, 1])
+with timetable_column:
+    reported = calendar(events=calendar_events(), options=calendar_options(),
+                        custom_css=CALENDAR_CSS, key="timetable-" + str(calendar_version()))
+    apply_dragged_change(reported)
+    place_armed_artist(reported)
+with panel_column:
+    show_panel(reported)
+
+show_catalogue()
