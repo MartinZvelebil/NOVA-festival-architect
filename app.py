@@ -461,7 +461,8 @@ def show_clicked_performance(clicked):
     if booking_id is None:
         with st.container(border=True, height=DETAIL_HEIGHT):
             st.markdown("#### The performance")
-            st.caption("Click a block in the timetable to see the artist behind it.")
+            st.caption("Click a block in the timetable to see the artist behind it, "
+                       "and to cancel it.")
         return
 
     booking = logic.get_booking(booking_id)
@@ -472,13 +473,18 @@ def show_clicked_performance(clicked):
     with st.container(border=True, height=DETAIL_HEIGHT):
         st.markdown("#### " + artist["name"])
         st.caption(artist["genre"])
-        st.divider()
-        st.metric("Plays", booking["start_time"] + "–"
-                  + logic.end_time(artist["id"], booking["start_time"]))
-        st.metric("Stage", logic.stage_name(booking["stage_id"]))
-        st.metric("Set length", artist["duration_min"] + " min")
-        st.metric("Fee", artist["fee"] + " €")
-        st.divider()
+
+        # Two facts per row: four stacked metric cards plus a button do not fit the panel.
+        plays, stage = st.columns(2)
+        plays.metric("Plays", booking["start_time"] + "–"
+                     + logic.end_time(artist["id"], booking["start_time"]))
+        stage.metric("Stage", logic.stage_name(booking["stage_id"]))
+        length, fee = st.columns(2)
+        length.metric("Set length", artist["duration_min"] + " min")
+        fee.metric("Fee", artist["fee"] + " €")
+        style_metric_cards(background_color=WARM_SAND, border_left_color=STAGE_COLOURS[1],
+                           border_color=WARM_SAND, box_shadow=False)
+
         if st.button("Cancel this performance", key="cancel_" + booking["id"],
                      use_container_width=True):
             cancel_performance(booking["id"])
