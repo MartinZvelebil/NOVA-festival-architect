@@ -1,4 +1,6 @@
 """Festival Architect: every screen of the app lives here. Start it with `uv run streamlit run app.py`."""
+from datetime import time
+
 import streamlit as st
 
 import logic
@@ -19,10 +21,52 @@ def stage_label(stage_id):
     return logic.stage_name(stage_id)
 
 
-def artist_line(artist):
-    """Build the one-line summary of an artist used in the catalogue."""
-    return ("**" + artist["name"] + "** · " + artist["genre"] + " · "
-            + artist["fee"] + " € · " + artist["duration_min"] + " min")
+def chosen_artist_id():
+    """Return the artist the organiser clicked in the catalogue, or None if they clicked none."""
+    if "chosen_artist" in st.session_state:
+        return st.session_state["chosen_artist"]
+    return None
+
+
+def choose_artist(artist_id):
+    """Remember which artist was clicked, so the form below opens on that artist."""
+    st.session_state["chosen_artist"] = artist_id
+
+
+def remember_message(text):
+    """Keep a message so it survives the redraw that follows an accepted booking."""
+    st.session_state["message"] = text
+
+
+def show_remembered_message():
+    """Print the message left by the last accepted booking, once."""
+    if "message" in st.session_state:
+        st.success(st.session_state["message"])
+        del st.session_state["message"]
+
+
+def forget_artist():
+    """Drop the remembered choice, after a booking is made or the artist is gone."""
+    if "chosen_artist" in st.session_state:
+        del st.session_state["chosen_artist"]
+
+
+def show_artist_card(artist, column):
+    """Draw one artist as a card. Clicking it picks that artist in the form below."""
+    with column.container(border=True):
+        st.markdown("### " + artist["name"])
+        st.caption(artist["genre"])
+        left, right = st.columns(2)
+        left.markdown("**" + artist["fee"] + " €**")
+        right.markdown(artist["duration_min"] + " min")
+        if logic.is_booked(artist["id"]):
+            st.caption("Already playing")
+        elif artist["id"] == chosen_artist_id():
+            st.button("Chosen", key="pick_" + artist["id"], disabled=True,
+                      use_container_width=True)
+        else:
+            st.button("Choose", key="pick_" + artist["id"], use_container_width=True,
+                      on_click=choose_artist, args=(artist["id"],))
 
 
 def free_artist_ids():
@@ -32,6 +76,21 @@ def free_artist_ids():
         if not logic.is_booked(artist["id"]):
             ids.append(artist["id"])
     return ids
+
+
+def opening_time():
+    """Return the festival's opening time as a clock value, for the time picker's default."""
+    minutes = logic.to_minutes(logic.opens())
+    return time(minutes // 60, minutes % 60)
+
+
+def chosen_position(free):
+    """Return where the clicked artist sits in the picker, or 0 when nothing was clicked."""
+    chosen = chosen_artist_id()
+    for position in range(len(free)):
+        if free[position] == chosen:
+            return position
+    return 0
 
 
 def stage_ids():
@@ -56,14 +115,15 @@ def show_budget():
 def show_booking():
     """Catalogue plus the form that adds one performance to the lineup."""
     st.title("Book an artist")
+    show_remembered_message()
     show_budget()
 
     st.subheader("The catalogue")
-    for artist in logic.all_artists():
-        line = artist_line(artist)
-        if logic.is_booked(artist["id"]):
-            line = line + " · **booked**"
-        st.markdown(line)
+    artists = logic.all_artists()
+    columns = st.columns(2)
+    for position in range(len(artists)):
+        # two cards per row: even positions on the left, odd ones on the right
+        show_artist_card(artists[position], columns[position % 2])
 
     st.subheader("Add a performance")
     free = free_artist_ids()
@@ -72,14 +132,19 @@ def show_booking():
         return
 
     with st.form("add_booking"):
-        artist_id = st.selectbox("Artist", free, format_func=artist_label)
+        artist_id = st.selectbox("Artist", free, index=chosen_position(free),
+                                 format_func=artist_label)
         stage_id = st.selectbox("Stage", stage_ids(), format_func=stage_label)
-        start_time = st.text_input("Start time", value=logic.opens())
+        picked = st.time_input("Start time", value=opening_time(), step=300)
+        start_time = logic.to_time_text(picked.hour * 60 + picked.minute)
         if st.form_submit_button("Add performance"):
             refusal = logic.add_booking(artist_id, stage_id, start_time)
             if refusal == "":
-                st.success(logic.get_artist(artist_id)["name"] + " plays at " + start_time
-                           + " on " + logic.stage_name(stage_id) + ".")
+                forget_artist()
+                remember_message(logic.get_artist(artist_id)["name"] + " plays at "
+                                 + start_time + " on " + logic.stage_name(stage_id) + ".")
+                # redraw, so the catalogue and the budget show the booking we just made
+                st.rerun()
             else:
                 st.warning(refusal)
 
