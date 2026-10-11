@@ -7,6 +7,7 @@ import logic
 
 SCREENS = ["Book an artist", "The lineup"]
 CARDS_PER_ROW = 4
+CARD_HEIGHT = 190
 
 
 # ---------- small helpers ----------
@@ -59,7 +60,9 @@ def show_artist_card(artist, column):
     A booked artist's button is greyed out and says so.
     """
     booked = logic.is_booked(artist["id"])
-    with column.container(border=True):
+    # A fixed height keeps every card in the row the same size, whether or not the
+    # artist's name wraps onto a second line.
+    with column.container(border=True, height=CARD_HEIGHT):
         if booked:
             # grey, so a card you cannot pick looks different before you read it
             st.markdown("#### :grey[" + artist["name"] + "]")
@@ -129,10 +132,13 @@ def show_booking():
 
     st.subheader("The catalogue")
     artists = logic.all_artists()
-    columns = st.columns(CARDS_PER_ROW)
-    for position in range(len(artists)):
-        # fill the row left to right, then start the next one
-        show_artist_card(artists[position], columns[position % CARDS_PER_ROW])
+    # One st.columns per row, not one for the whole catalogue: a row of columns is only as
+    # tall as its own cards, so a long artist name cannot push the row below it out of line.
+    for first in range(0, len(artists), CARDS_PER_ROW):
+        row = artists[first:first + CARDS_PER_ROW]
+        columns = st.columns(CARDS_PER_ROW)
+        for position in range(len(row)):
+            show_artist_card(row[position], columns[position])
 
     st.subheader("Add a performance")
     free = free_artist_ids()
@@ -187,7 +193,7 @@ def show_lineup():
 
 # ---------- this part runs on every click ----------
 
-st.set_page_config(page_title="Festival Architect")
+st.set_page_config(page_title="Festival Architect", layout="wide")
 st.sidebar.title("Festival Architect")
 screen = st.sidebar.radio("Screen", SCREENS)
 st.sidebar.caption("The plan lives in data/*.csv. Reset it with `uv run python seed.py`.")

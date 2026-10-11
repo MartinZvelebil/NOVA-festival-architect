@@ -59,8 +59,13 @@ def test_the_settings_table_holds_the_numbers_of_the_brief():
     assert values["min_artists_to_finalise"] == "4"
 
 
-def test_the_plan_starts_as_an_empty_draft():
-    """A fresh copy of the data has no bookings and a plan in draft."""
+def test_the_plan_starts_as_an_empty_draft(tmp_path, monkeypatch):
+    """A fresh copy of the data has no bookings and a plan in draft.
+
+    This asks the pristine seed, not data/: the live database is meant to fill up as the
+    organiser books artists, so asserting it is empty would go red the moment anyone uses the app.
+    """
+    use_temp_data(tmp_path, monkeypatch)
     assert db.load_table("bookings") == []
     plan = db.load_table("plan")
     assert len(plan) == 1
