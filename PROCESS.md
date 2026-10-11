@@ -1,7 +1,8 @@
 # How this project was built
 
-A record of the steps taken on Festival Architect before a single business rule was written, and
-why each step came before the next. Written for my own hand-in notes, and so the order is
+A record of how Festival Architect was built, start to finish, and why each step came before the
+next. Steps 1 to 7 are everything that happened before a single business rule existed; steps 8 to
+11 are the build itself and what it taught. Written for my own hand-in notes, and so the order is
 reproducible on the next project.
 
 ---
@@ -109,7 +110,7 @@ specs in `specs/`, indexed by `specs/00-task-list.md`:
 | 3 | Timetable and budget | write them first |
 | 4 | Move or remove a performance | 3 |
 | 5 | Finalise and reopen | 5 |
-| 6 | Catalogue screen | write them first |
+| 6 | One screen, planned like a calendar | write them first |
 | 7 | Polish and hand-in | all |
 
 The counts were checked with `pytest --collect-only`, not estimated: 3 + 15 + 3 + 5 = the 26 red
@@ -126,9 +127,82 @@ be booked. Task 4 before 5, because finalisation is a lock on top of editing.
 
 ---
 
+## Step 8 — Build the tasks, one branch at a time
+
+Each task was its own branch, its own red-to-green run and its own pull request. The suite grew
+from 33 tests to 60, and never went green by changing a test to match the code.
+
+| Task | What it added | Suite after |
+| --- | --- | --- |
+| 1 Settings and the clock | `to_minutes` / `to_time_text`, the settings readers, `end_time` | 10 passed |
+| 2 Book an artist | the four rules, `add_booking`, and the first `app.py` | 24 passed |
+| 3 Timetable and budget | `logic.timetable`, the calendar day view, metric cards | 32 passed |
+| 4 Move or remove | `edit_booking`, `remove_booking`, drag-to-move | 37 passed |
+| 5 Finalise and reopen | the draft/final lock on every change | **45 passed — all green** |
+| 6 One screen | the whole product on one page, arm-and-place booking | 56 passed |
+| 7 Polish and hand-in | README, the requirement map, messages on the palette | 60 passed |
+
+Task 5 is the moment the suite first went fully green: every test written back in Step 4, before a
+single rule existed, now passed.
+
+## Step 9 — Let the design argue back
+
+The UI was not designed once and built. It was built, looked at, and changed — eight times, each
+one a small commit after seeing the thing on screen:
+
+- the catalogue went from a dot-separated list to cards, then to four per row, then to a fixed
+  height so a booked card and a free card line up;
+- the timetable grew clickable blocks, then a detail panel **beside** the calendar instead of
+  under it, because a panel below the fold gives no sign that the click did anything;
+- dragging replaced the manual move form, and the drag step went 30 → 15 → 5 minutes as the form
+  disappeared and precision had to come from somewhere;
+- **the biggest change came from a question, not a bug.** Asking "why is this two screens?" had no
+  good answer — the split was copied from the starter apps, not from the brief. Task 6's spec was
+  rewritten and the app became one page.
+
+The rule that made this safe: all of it was `app.py`. The 45 logic tests never had to care.
+
+## Step 10 — What the build actually taught
+
+Four things that cost real time and were not in any plan:
+
+- **A stale import looks exactly like a bug.** A `NotImplementedError` traceback appeared for code
+  that was already written: the running Streamlit process had imported `logic` before the merge
+  and kept the old module. Restarting the server fixed it. Nothing was wrong with the code.
+- **Timezones hid inside a click.** `dateClick` returns `date.toISOString()` — UTC — so every
+  clicked slot would have been shifted by the local offset. Pinning the calendar to
+  `timeZone: "UTC"` makes the times sent and the times returned the same. Found by reading the
+  component's own JavaScript, not by debugging a wrong booking.
+- **Not every feature is possible.** Dragging an artist card onto the calendar cannot work:
+  `streamlit-calendar` never creates an external `Draggable`, emits no `drop` callback, and runs
+  in a sandboxed iframe. Arming an artist and clicking a slot is the two-click stand-in, and the
+  reason is written into the spec so it does not look like an omission.
+- **Messages can be eaten by their own redraw.** A refusal was stored, shown, and then consumed by
+  the second redraw the calendar's remount triggered — too fast to read. Messages now carry a
+  ten-second expiry and drain a progress bar.
+
+## Step 11 — Three tests changed, and why each one was allowed
+
+`CLAUDE.md` says never edit a test to make it pass. Three were changed anyway, each for a reason
+that was stated out loud and agreed before the edit:
+
+1. **`test_a_longer_festival_day_makes_more_room` was deleted.** Its arithmetic was wrong: a
+   120-minute set from 22:00 ends at 24:00, which no closing time can allow. It also duplicated
+   `test_the_closing_time_rule_uses_the_configured_close`, so nothing was lost.
+2. **`test_the_plan_starts_as_an_empty_draft` was pointed at `seed/`.** It read the live `data/`
+   and asserted it was empty, so it went red the moment anyone used the app. The promise it meant
+   to make was about the pristine data.
+3. **`test_the_lineup_screen_renders` lost its screen switcher.** The two-screen design it
+   described had been deliberately removed. It changed because the design changed, not to go green.
+
+The pattern: a test is edited when it describes something false or something no longer intended —
+never when it is merely inconvenient.
+
 ## Where it stands
 
-26 tests red on purpose, 7 green, no `app.py` yet, no rule implemented yet. The next move is Task 1.
+Seven tasks, nine pull requests, **60 tests passing**. About 1,000 lines of Python, of which
+`logic.py` is 357 and knows nothing about Streamlit. Every requirement in `ASSIGNMENT.md` has a
+function that decides it and a test that proves it — the table at the end of this file says which.
 
 ## What I would tell someone starting the same project
 
@@ -141,6 +215,12 @@ be booked. Task 4 before 5, because finalisation is a lock on top of editing.
 5. **Look at the design before committing to it.** A throwaway preview with fake data costs
    minutes and saved a palette I would have disliked three tasks later.
 6. **Plan the order, and write down why it is the order.** The reason is the part you forget.
+7. **Keep the rules out of the screen.** Every UI change — cards, calendar, one page instead of
+   two — touched only `app.py`. Redesigning twice cost nothing because no rule lived there.
+8. **Check what a library can do before promising it.** Reading the component's own code took
+   minutes and avoided specifying a feature that cannot exist.
+9. **Look at it, then change it.** The best decision in the project came from a question about
+   the design, not from a bug report or a requirement.
 
 ---
 
