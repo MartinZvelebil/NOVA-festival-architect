@@ -183,6 +183,8 @@ def calendar_options():
         "slotMinTime": logic.opens() + ":00",
         "slotMaxTime": logic.closes() + ":00",
         "slotDuration": "00:30:00",
+        # the grid shows half hours, but a dragged block lands on the nearest quarter
+        "snapDuration": "00:15:00",
         # A half-hour slot needs real height, or a 40-minute set clips its own name.
         "slotMinHeight": 46,
         "expandRows": True,
@@ -424,6 +426,22 @@ def apply_dragged_change(payload):
     st.rerun()
 
 
+def cancel_performance(booking_id):
+    """Take the performance showing in the detail panel out of the lineup (FA04)."""
+    booking = logic.get_booking(booking_id)
+    if booking is None:
+        return
+    name = logic.get_artist(booking["artist_id"])["name"]
+
+    refusal = logic.remove_booking(booking_id)
+    if refusal == "":
+        remember_message(name + " is out of the lineup. The fee is back in the budget.")
+    else:
+        remember_refusal(refusal)
+    redraw_calendar()
+    st.rerun()
+
+
 def clicked_booking_id(clicked):
     """Return the booking id of the block the organiser clicked, or None if they clicked none."""
     if not isinstance(clicked, dict):
@@ -460,6 +478,10 @@ def show_clicked_performance(clicked):
         st.metric("Stage", logic.stage_name(booking["stage_id"]))
         st.metric("Set length", artist["duration_min"] + " min")
         st.metric("Fee", artist["fee"] + " €")
+        st.divider()
+        if st.button("Cancel this performance", key="cancel_" + booking["id"],
+                     use_container_width=True):
+            cancel_performance(booking["id"])
 
 
 def show_lineup_as_a_list():
