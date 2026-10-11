@@ -21,6 +21,9 @@ WARM_SAND = "#AC8968"
 # draw, so we pick one; nothing is stored against it and no rule ever reads it.
 FESTIVAL_DAY = "2026-06-20"
 
+# The detail panel stands as tall as the calendar next to it, so the row never changes shape.
+DETAIL_HEIGHT = 760
+
 
 # ---------- small helpers ----------
 
@@ -257,9 +260,14 @@ def show_lineup():
         st.caption("Nothing booked yet. Add a performance first.")
         return
 
-    clicked = calendar(events=calendar_events(), options=calendar_options(),
-                       custom_css=CALENDAR_CSS, key="timetable")
-    show_clicked_performance(clicked)
+    # The calendar on the left, the detail of whatever was clicked on the right, so a click
+    # always has a visible effect without the organiser having to scroll to find it.
+    timetable_column, detail_column = st.columns([3, 1])
+    with timetable_column:
+        clicked = calendar(events=calendar_events(), options=calendar_options(),
+                           custom_css=CALENDAR_CSS, key="timetable")
+    with detail_column:
+        show_clicked_performance(clicked)
 
     with st.expander("The same lineup as a list"):
         show_lineup_as_a_list()
@@ -275,10 +283,16 @@ def clicked_booking_id(clicked):
 
 
 def show_clicked_performance(clicked):
-    """Show everything about the performance whose block was clicked (FA01, FA03)."""
+    """Show everything about the performance whose block was clicked (FA01, FA03).
+
+    Stands in its own column beside the calendar, so it is on screen before the click happens.
+    """
     booking_id = clicked_booking_id(clicked)
+
     if booking_id is None:
-        st.caption("Click a performance to see the artist behind it.")
+        with st.container(border=True, height=DETAIL_HEIGHT):
+            st.markdown("#### The performance")
+            st.caption("Click a block in the timetable to see the artist behind it.")
         return
 
     booking = logic.get_booking(booking_id)
@@ -286,15 +300,15 @@ def show_clicked_performance(clicked):
         return
     artist = logic.get_artist(booking["artist_id"])
 
-    with st.container(border=True):
+    with st.container(border=True, height=DETAIL_HEIGHT):
         st.markdown("#### " + artist["name"])
         st.caption(artist["genre"])
-        first, second, third, fourth = st.columns(4)
-        first.metric("Fee", artist["fee"] + " €")
-        second.metric("Set length", artist["duration_min"] + " min")
-        third.metric("Stage", logic.stage_name(booking["stage_id"]))
-        fourth.metric("Plays", booking["start_time"] + "–"
-                      + logic.end_time(artist["id"], booking["start_time"]))
+        st.divider()
+        st.metric("Plays", booking["start_time"] + "–"
+                  + logic.end_time(artist["id"], booking["start_time"]))
+        st.metric("Stage", logic.stage_name(booking["stage_id"]))
+        st.metric("Set length", artist["duration_min"] + " min")
+        st.metric("Fee", artist["fee"] + " €")
 
 
 def show_lineup_as_a_list():
