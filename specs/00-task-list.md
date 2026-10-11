@@ -14,7 +14,7 @@ Every task follows the course planning sheet
 | 3 | The timetable and the budget | `task-3-timetable.md` | `feature-timetable` | FA03 | write them first |
 | 4 | Move or remove a performance | `task-4-revise.md` | `feature-revise-booking` | FA04, FA R5 | 3 |
 | 5 | Finalise and reopen | `task-5-finalise.md` | `feature-finalise` | FA05, FA R5 | 5 |
-| 6 | The catalogue screen | `task-6-catalogue.md` | `feature-catalogue` | FA01 | write them first |
+| 6 | One screen, planned like a calendar | `task-6-catalogue.md` | `feature-one-screen` | FA01–FA05 | write them first |
 | 7 | Polish and hand-in | `task-7-polish.md` | `task-7-polish` | — | all of them |
 
 26 tests are red today. Tasks 1, 2, 4 and 5 turn all 26 green. Tasks 3 and 6 are screen work, so
