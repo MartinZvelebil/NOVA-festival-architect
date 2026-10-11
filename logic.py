@@ -1,7 +1,8 @@
 """Business rules of Festival Architect: the catalogue, the timetable, the budget and the plan.
 
-Nothing here is built yet. Every function below is a signature the acceptance tests
-(tests/test_acceptance.py) already call. Build them one at a time until the tests go green.
+Every rule of ASSIGNMENT.md lives here and nowhere else. A function that refuses something
+returns the reason as a sentence; an empty string "" means it was accepted. Nothing in this
+file knows about Streamlit, so the tests can check every rule without drawing a screen.
 """
 import db
 

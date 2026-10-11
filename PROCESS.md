@@ -1,143 +1,109 @@
-# How this project was built
+# How I built Festival Architect
 
-A record of the steps taken on Festival Architect before a single business rule was written, and
-why each step came before the next. Written for my own hand-in notes, and so the order is
-reproducible on the next project.
+A one-page account of the order I worked in and why. The long version, with every detail, is in
+git history at commit `842c763`.
 
 ---
 
-## Step 1 — Turn the brief into something I own
+## The order I worked in
 
-The requirements were a web page on the course site. I converted the whole page into
-`ASSIGNMENT.md` inside the repo: the opportunity, the first release, the user journey, the five
-capabilities (FA01–FA05), the five business rules (FA R1–R5), what must be remembered, the six
-acceptance scenarios (A1–A6) and the scope boundaries, with a link back to the source.
+1. **Put the brief in the repo.** I converted the course web page into `ASSIGNMENT.md`, so every
+   later decision could cite a requirement ID instead of a browser tab.
+2. **Read the two starter apps first.** `splitit` and `tiny-crm` are the same app twice, so what
+   they share is the convention the course teaches. I wrote it down in `CLAUDE.md`: the
+   `app.py → logic.py → db.py` layering, "everything out of a CSV is text", one task per branch,
+   never edit a test to make it pass.
+3. **Decided to work test-first.** The brief's acceptance criteria are already tests — scenario A4
+   names €9,000 and €1,001 — so writing them as tests was transcription, not design.
+4. **Wrote the tests before any rule.** 18 acceptance tests, the `db.py`/`seed.py` scaffolding, and
+   a `logic.py` of stubs raising `NotImplementedError("FA02: not built yet")`, so each failure said
+   what it was waiting for. **18 failed, 6 passed** — the red baseline.
+5. **Moved the fixed numbers into `data/settings.csv`**, read through `db.py` like any other table.
+   I split the tests rather than loosen them: the acceptance tests keep the brief's literal
+   numbers, and new tests prove the rules follow the config.
+6. **Chose how it should look.** Streamlit theming, `streamlit-extras`, and `streamlit-calendar`
+   for the timetable. I built a throwaway preview with fake data to judge the palette — and
+   replaced my first choice after seeing it.
+7. **Split the build into seven task specs**, each in the course's Why / What / Out of scope /
+   Done when format, ordered so nothing is blocked: time arithmetic first, because comparing times
+   as text is the bug this codebase exists to avoid.
 
-**Why first.** Everything after this cites requirement IDs. A brief that lives in a browser tab
-cannot be cited, cannot be diffed, and is not in the repo the grader clones.
+## Building it
 
-## Step 2 — Study the two starter apps and write the rules down
+Each task was its own branch, its own red-to-green run, its own pull request.
 
-Before writing my own code I read `splitit` and `tiny-crm` end to end — their `AGENTS.md`,
-`README.md`, `db.py`, `logic.py`, `app.py`, their tests, specs and issues. They are the same app
-twice, so whatever they share is the convention the course is teaching.
-
-I distilled that into `CLAUDE.md`: the `app.py → logic.py → db.py` layering, "everything out of a
-CSV is text", `data/` live versus `seed/` pristine, beginner-level Python (plain loops, a
-docstring per function, no classes), one task per branch, never commit to main, never edit a test
-to make it pass, and cite file and line when explaining code.
-
-**Why.** The AI will imitate whatever it finds. Pointing it at conventions that already exist
-beats inventing my own, and it keeps my project recognisable as the same family as the starters.
-
-## Step 3 — Decide to work test-first
-
-The acceptance criteria in the brief already read like tests — A1 names 16:30 and 17:00, A4 names
-€9,000 and €1,001. The starters ship tests that are red on purpose and whose specs say "green
-without changing the tests". So the criteria became the test suite, written before any rule.
-
-**Why.** The rules interlock — the duplicate check, the overlap check, the budget check and the
-"an edit is a replacement" rule all touch the same function. Without tests, fixing one silently
-breaks another.
-
-## Step 4 — Write the tests and the scaffolding they need
-
-Branch `tests-acceptance-criteria`.
-
-- `db.py` and `seed.py`, copied in shape from the starters: a `COLUMNS` dict, `DATA_DIR` built
-  from `__file__`, `load_table` / `save_table` / `append_row` / `next_id`. No festival rules in
-  them at all.
-- `seed/*.csv` and `data/*.csv`: eight fictional artists with genre, fee and duration, two stages,
-  an empty lineup, a draft plan.
-- `tests/conftest.py`: `use_temp_data` copies the seed into a throwaway folder and monkeypatches
-  `db.DATA_DIR`, so no test can ever touch `data/`. Plus builders `make_artist`, `make_stage`,
-  `save_catalogue`.
-- `tests/test_acceptance.py`: the six scenarios as 18 tests, using the brief's own numbers.
-- `tests/test_smoke.py`: the catalogue promises, which pass immediately.
-- `logic.py`: every function the tests call, as a signature whose body raises
-  `NotImplementedError("FA02: not built yet")`.
-
-**Result: 18 failed, 6 passed** — and each failure names the requirement it is waiting for, rather
-than collapsing into one import error.
-
-**One decision worth recording.** Every function that changes the plan returns *the reason it
-refused*, as plain text, with `""` meaning accepted. That is FA02's "explain any reason a booking
-cannot be accepted" falling straight out of the return value, and it avoids exceptions, which the
-starter apps never use.
-
-## Step 5 — Move the fixed numbers into a config file
-
-The opening time, closing time, budget and minimum-lineup-size started as constants in `logic.py`.
-I moved them into `data/settings.csv`, read through `db.py` like any other table — not a new
-mechanism, so it inherits seeding, resetting and test isolation for free.
-
-The tests were split rather than loosened: `test_acceptance.py` keeps asserting the brief's literal
-numbers against the shipped settings, and a new `test_settings.py` proves the rules actually follow
-the config — set the budget to 3,000 and a 3,001 artist is refused; close at 20:00 and a set
-running past it is refused.
-
-**Result: 26 failed, 7 passed.**
-
-## Step 6 — Choose how it should look
-
-Streamlit is not React, so a component library like shadcn/ui was never an option. I picked
-Streamlit theming for the palette, `streamlit-extras` for polish, and `streamlit-calendar` for the
-timetable — a festival day across two stages *is* a calendar day view, so that one component does
-real work. Both packages were installed and import-checked against Streamlit 1.62 before being
-pinned in `pyproject.toml`.
-
-The palette went through two rounds. The first, taken from a photo of a bar, was a dark bottle
-green with a riso red. To judge it I built a **throwaway preview** in the scratchpad — fake lineup,
-hard-coded, outside the repo — rendering the calendar and the metric cards in the real colours.
-Seeing it beat imagining it: the second palette, "earthy and serene" (warm sand, soil, olive,
-timber brown), is the one that stayed. The preview was deleted afterwards.
-
-The rules went into `CLAUDE.md`: colours live in `.streamlit/config.toml` and never in `app.py`,
-the calendar is for the timetable only, extras is for polish only, and `logic.py` never imports
-Streamlit or mentions a colour.
-
-## Step 7 — Split the build into tasks
-
-Using the course planning sheet (Why / What / Out of scope / Done when, with at least three checks:
-an accepted action, a rejected action with unchanged data, and a restart), the work became seven
-specs in `specs/`, indexed by `specs/00-task-list.md`:
-
-| # | Task | Tests it turns green |
+| Task | What it added | Suite after |
 | --- | --- | --- |
-| 1 | Settings and the clock | 3 |
-| 2 | Book an artist (`first-feature.md`) | 15 |
-| 3 | Timetable and budget | write them first |
-| 4 | Move or remove a performance | 3 |
-| 5 | Finalise and reopen | 5 |
-| 6 | Catalogue screen | write them first |
-| 7 | Polish and hand-in | all |
+| 1 Settings and the clock | `to_minutes`, the settings readers, `end_time` | 10 passed |
+| 2 Book an artist | the four rules, `add_booking`, the first `app.py` | 24 passed |
+| 3 Timetable and budget | `logic.timetable`, the calendar day view | 32 passed |
+| 4 Move or remove | `edit_booking`, `remove_booking`, drag-to-move | 37 passed |
+| 5 Finalise and reopen | the draft/final lock on every change | **45 — all green** |
+| 6 One screen | the whole product on one page | 56 passed |
+| 7 Polish and hand-in | README, the requirement map | 60 passed |
 
-The counts were checked with `pytest --collect-only`, not estimated: 3 + 15 + 3 + 5 = the 26 red
-tests exactly.
+Task 5 is where every test I wrote in step 4, before a single rule existed, finally passed.
 
-**Granularity rule.** A task is a slice you can demo, sized to one sitting. That is why "book an
-artist" is one task and not four — splitting the budget check off would leave a feature that
-knowingly does the wrong thing. And why the timetable is its own task despite adding no rules: the
-calendar is real work.
+## What the build taught me
 
-**The order is load-bearing.** Task 1 first, because comparing times as text is the exact bug this
-codebase is shaped to avoid. Task 2 before 3, because there is nothing to draw until something can
-be booked. Task 4 before 5, because finalisation is a lock on top of editing.
+- **I redesigned the interface eight times**, each after opening it and disliking something. All of
+  it was `app.py`; my 45 logic tests never had to care. That is what the layering buys.
+- **My best decision was a question.** I asked why the app was on two screens. There was no good
+  answer — I had copied the split from the starter apps, not from my brief — so I had Task 6's spec
+  rewritten and the app became one page.
+- **A stale import looks exactly like a bug.** I reported a `NotImplementedError` for code that was
+  already written; my Streamlit process had kept the old module. Restarting fixed it.
+- **Timezones hid inside a click.** `dateClick` returns UTC, so every slot I clicked would have
+  been booked an hour out. Pinning the calendar to `timeZone: "UTC"` fixed it, caught by reading
+  the component's source before shipping.
+- **Not everything I ask for is possible.** Dragging an artist card onto the calendar cannot work —
+  the component runs in a sandboxed iframe. Picking an artist up and clicking a slot is the
+  stand-in, and the reason is in the spec so it does not read like something forgotten.
 
----
+## Three tests I changed, and why
+
+`CLAUDE.md` forbids editing a test to make it pass. I changed three, deciding each one deliberately:
+
+1. **Deleted** a test whose arithmetic was impossible (a 120-minute set from 22:00 ends at 24:00),
+   and which duplicated another.
+2. **Pointed** the "plan starts empty" test at `seed/` instead of the live `data/`, which went red
+   the moment I booked my first artist.
+3. **Updated** the two-screen render test after I removed the two-screen design.
+
+The rule I want to keep: edit a test when it describes something false or something I no longer
+intend — never when it is merely in the way.
 
 ## Where it stands
 
-26 tests red on purpose, 7 green, no `app.py` yet, no rule implemented yet. The next move is Task 1.
+Seven tasks, nine pull requests, **60 tests passing**. About 1,000 lines of Python, of which
+`logic.py` is 357 and imports no Streamlit.
 
-## What I would tell someone starting the same project
+## Where each requirement lives
 
-1. **Put the brief in the repo first.** Everything else cites it.
-2. **Read the starter apps before writing anything.** The conventions are already decided.
-3. **Write the acceptance criteria as tests before any code.** They are already written as tests —
-   with real numbers in them — you are only transcribing.
-4. **Make failures say what they are waiting for.** Stubs that raise a named error beat an import
-   error that fails everything identically.
-5. **Look at the design before committing to it.** A throwaway preview with fake data costs
-   minutes and saved a palette I would have disliked three tasks later.
-6. **Plan the order, and write down why it is the order.** The reason is the part you forget.
+Every ID in `ASSIGNMENT.md`, the function that decides it, and the test that proves it. A
+requirement I cannot point a function at is one I did not build.
+
+| Requirement | Decided in | Proved by |
+| --- | --- | --- |
+| FA01 Browse artists | `app.py show_artist_card`; `logic.is_booked` | `test_catalogue.py::test_an_artist_over_the_budget_names_the_shortfall` |
+| FA02 Schedule a performance | `logic.check_booking`, `logic.add_booking`, `logic.end_time` | `test_acceptance.py::test_a1_overlap_on_the_same_stage_is_rejected` |
+| FA03 Review the plan | `logic.timetable`, `logic.total_fees`, `logic.remaining_budget` | `test_timetable.py::test_the_timetable_is_in_time_order_not_booking_order` |
+| FA04 Revise a booking | `logic.edit_booking`, `logic.remove_booking` | `test_acceptance.py::test_a5_removing_a_booking_releases_its_slot_and_its_fee` |
+| FA05 Finalise and reopen | `logic.can_finalise`, `finalise_plan`, `reopen_plan` | `test_acceptance.py::test_a6_four_valid_bookings_can_be_finalised` |
+| FA R1 Artist availability | the duplicate check in `check_booking`; fees are never stored | `test_acceptance.py::test_a4_an_artist_cannot_be_booked_twice_on_any_stage` |
+| FA R2 Time and stage | `logic.to_minutes` and `logic.overlaps`, whose strict `<` lets one set start as the last ends | `test_acceptance.py::test_a3_a_set_that_ends_exactly_at_the_close_is_allowed` |
+| FA R3 Simultaneous performances | the stage filter: a clash is only sought on the same stage | `test_acceptance.py::test_a2_two_artists_may_play_at_the_same_time_on_different_stages` |
+| FA R4 Budget | the fee check against `remaining_budget` | `test_acceptance.py::test_a4_a_booking_one_euro_over_the_budget_is_rejected` |
+| FA R5 Valid edits | `booking_id` threaded into `check_booking`; `FINAL_REFUSAL` guards every change | `test_acceptance.py::test_a5_a_rejected_edit_leaves_the_original_booking_untouched` |
+
+Two properties are not single functions: **totals are never stored** (timetable and budget are both
+recomputed from `bookings.csv`, so they cannot disagree), and **a refusal writes nothing** (every
+mutator checks before it touches `db`).
+
+## What I would do again
+
+1. Put the brief in the repo; everything cites it.
+2. Write the acceptance criteria as tests before any code — they are already written as tests.
+3. Make failures name what they are waiting for.
+4. Keep the rules out of the screen, so redesigning costs nothing.
+5. Open it and look at it. The best change came from a question, not a bug report.
