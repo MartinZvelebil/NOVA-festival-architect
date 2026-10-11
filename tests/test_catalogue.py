@@ -186,3 +186,36 @@ def test_the_metric_cards_are_styled_from_the_first_draw(tmp_path, monkeypatch):
         if "metric-container" in block.body:
             styles.append(block.body)
     assert len(styles) == 1
+
+
+# ---------- messages ----------
+
+def test_a_message_survives_the_redraws_that_follow_it(tmp_path, monkeypatch):
+    """A refusal has to outlive the redraw it causes, or nobody can read it."""
+    import time as clock
+
+    use_temp_data(tmp_path, monkeypatch)
+    save_catalogue([make_artist("1", duration_min="60")])
+
+    app = open_app()
+    app.session_state["message"] = {"text": "Palco Tejo is busy.", "good": False,
+                                    "until": clock.monotonic() + 10}
+    app.run()
+    assert "Palco Tejo is busy." in [warning.value for warning in app.warning]
+    app.run()
+    assert "Palco Tejo is busy." in [warning.value for warning in app.warning]
+
+
+def test_a_message_goes_away_once_its_time_is_up(tmp_path, monkeypatch):
+    """It stays long enough to read, then clears itself out of the way."""
+    import time as clock
+
+    use_temp_data(tmp_path, monkeypatch)
+    save_catalogue([make_artist("1", duration_min="60")])
+
+    app = open_app()
+    app.session_state["message"] = {"text": "old news", "good": False,
+                                    "until": clock.monotonic() - 1}
+    app.run()
+    assert app.warning == []
+    assert "message" not in app.session_state

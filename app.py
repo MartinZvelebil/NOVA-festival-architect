@@ -3,7 +3,7 @@
 Start it with `uv run streamlit run app.py`. Everything here is presentation: the rules,
 the money and the timetable all come from logic.py.
 """
-from datetime import time
+import time
 
 import streamlit as st
 from streamlit_calendar import calendar
@@ -48,24 +48,51 @@ def disarm_artist():
 
 # ---------- messages that survive a redraw ----------
 
+# How long a message stays on screen, in seconds.
+MESSAGE_SECONDS = 10
+
+
 def remember_message(text):
-    """Keep a message so it survives the redraw that follows an accepted change."""
-    st.session_state["message"] = text
+    """Keep a message so it survives the redraws that follow an accepted change."""
+    st.session_state["message"] = {"text": text, "good": True,
+                                   "until": time.monotonic() + MESSAGE_SECONDS}
 
 
 def remember_refusal(text):
-    """Keep a refusal so it survives the redraw that puts things back."""
-    st.session_state["refusal"] = text
+    """Keep a refusal so it survives the redraws that put things back."""
+    st.session_state["message"] = {"text": text, "good": False,
+                                   "until": time.monotonic() + MESSAGE_SECONDS}
 
 
+def seconds_left():
+    """Return how long the message on screen still has, or 0 when there is none."""
+    if "message" not in st.session_state:
+        return 0
+    left = st.session_state["message"]["until"] - time.monotonic()
+    if left < 0:
+        return 0
+    return left
+
+
+@st.fragment(run_every="0.5s")
 def show_messages():
-    """Print whatever the last change left behind, once."""
-    if "message" in st.session_state:
-        st.success(st.session_state["message"])
-        del st.session_state["message"]
-    if "refusal" in st.session_state:
-        st.warning(st.session_state["refusal"])
-        del st.session_state["refusal"]
+    """Print what the last change left behind, with a bar showing how long it will stay.
+
+    A fragment that redraws itself twice a second, so the bar drains on its own. Without it
+    the message would vanish on the next redraw, which is far too fast to read.
+    """
+    left = seconds_left()
+    if left <= 0:
+        if "message" in st.session_state:
+            del st.session_state["message"]
+        return
+
+    message = st.session_state["message"]
+    if message["good"]:
+        st.success(message["text"])
+    else:
+        st.warning(message["text"])
+    st.progress(left / MESSAGE_SECONDS)
 
 
 # ---------- the calendar ----------
