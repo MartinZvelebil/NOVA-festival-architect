@@ -6,6 +6,7 @@ import streamlit as st
 import logic
 
 SCREENS = ["Book an artist", "The lineup"]
+CARDS_PER_ROW = 4
 
 
 # ---------- small helpers ----------
@@ -52,20 +53,28 @@ def forget_artist():
 
 
 def show_artist_card(artist, column):
-    """Draw one artist as a card. Clicking it picks that artist in the form below."""
+    """Draw one artist as a card. Clicking it picks that artist in the form below.
+
+    Every card carries a button, booked or not, so all the cards in a row are the same height.
+    A booked artist's button is greyed out and says so.
+    """
+    booked = logic.is_booked(artist["id"])
     with column.container(border=True):
-        st.markdown("### " + artist["name"])
-        st.caption(artist["genre"])
-        left, right = st.columns(2)
-        left.markdown("**" + artist["fee"] + " €**")
-        right.markdown(artist["duration_min"] + " min")
-        if logic.is_booked(artist["id"]):
-            st.caption("Already playing")
-        elif artist["id"] == chosen_artist_id():
-            st.button("Chosen", key="pick_" + artist["id"], disabled=True,
+        if booked:
+            # grey, so a card you cannot pick looks different before you read it
+            st.markdown("#### :grey[" + artist["name"] + "]")
+            st.caption(artist["genre"] + " · " + artist["fee"] + " € · "
+                       + artist["duration_min"] + " min")
+            st.button("Already playing", key="pick_" + artist["id"], disabled=True,
                       use_container_width=True)
         else:
-            st.button("Choose", key="pick_" + artist["id"], use_container_width=True,
+            st.markdown("#### " + artist["name"])
+            st.caption(artist["genre"] + " · **" + artist["fee"] + " €** · "
+                       + artist["duration_min"] + " min")
+            chosen = artist["id"] == chosen_artist_id()
+            st.button("Chosen" if chosen else "Choose", key="pick_" + artist["id"],
+                      disabled=chosen, use_container_width=True,
+                      type="primary" if chosen else "secondary",
                       on_click=choose_artist, args=(artist["id"],))
 
 
@@ -120,10 +129,10 @@ def show_booking():
 
     st.subheader("The catalogue")
     artists = logic.all_artists()
-    columns = st.columns(2)
+    columns = st.columns(CARDS_PER_ROW)
     for position in range(len(artists)):
-        # two cards per row: even positions on the left, odd ones on the right
-        show_artist_card(artists[position], columns[position % 2])
+        # fill the row left to right, then start the next one
+        show_artist_card(artists[position], columns[position % CARDS_PER_ROW])
 
     st.subheader("Add a performance")
     free = free_artist_ids()
