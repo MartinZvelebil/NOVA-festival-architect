@@ -87,24 +87,30 @@ def get_artist(artist_id):
 
 def all_stages():
     """Return every stage as a list of dicts."""
-    raise NotImplementedError("FA01: not built yet")
+    return db.load_table("stages")
 
 
 def is_booked(artist_id):
     """Say whether this artist is already somewhere in the lineup (FA R1)."""
-    raise NotImplementedError("FA R1: not built yet")
+    for booking in all_bookings():
+        if booking["artist_id"] == str(artist_id):
+            return True
+    return False
 
 
 # ---------- the lineup ----------
 
 def all_bookings():
     """Return every booking as a list of dicts."""
-    raise NotImplementedError("FA03: not built yet")
+    return db.load_table("bookings")
 
 
 def get_booking(booking_id):
     """Find one booking by id. Returns the booking dict, or None if there is no such booking."""
-    raise NotImplementedError("FA03: not built yet")
+    for booking in all_bookings():
+        if booking["id"] == str(booking_id):
+            return booking
+    return None
 
 
 def timetable(stage_id):
@@ -115,30 +121,105 @@ def timetable(stage_id):
 # ---------- the budget ----------
 
 def total_fees():
-    """Return the total booking fees of the current lineup, counting each artist once (FA R1)."""
-    raise NotImplementedError("FA R4: not built yet")
+    """Return the total booking fees of the current lineup, counting each artist once (FA R1).
+
+    Always added up from the saved bookings, never stored, so the lineup and the money
+    cannot drift apart.
+    """
+    total = 0
+    for booking in all_bookings():
+        artist = get_artist(booking["artist_id"])
+        total = total + int(artist["fee"])
+    return total
 
 
 def remaining_budget():
     """Return how much of the budget is still free (FA03)."""
-    raise NotImplementedError("FA R4: not built yet")
+    return budget() - total_fees()
 
 
 # ---------- changing the plan ----------
 # Every function below returns the reason it refused, in plain language the organiser can read.
 # An empty string "" means the change was accepted (FA02).
 
+def stage_name(stage_id):
+    """Return the name of one stage, or the id itself if there is no such stage."""
+    for stage in all_stages():
+        if stage["id"] == str(stage_id):
+            return stage["name"]
+    return str(stage_id)
+
+
+def overlaps(first_start, first_end, second_start, second_end):
+    """Say whether two sets share any minute. Touching end to end is not an overlap (FA R2)."""
+    return first_start < second_end and second_start < first_end
+
+
 def check_booking(artist_id, stage_id, start_time, booking_id=None):
     """Return why this performance cannot be accepted, or '' if it can.
 
     booking_id names the booking being replaced, so an edit does not clash with itself (FA R5).
     """
-    raise NotImplementedError("FA02: not built yet")
+    artist = get_artist(artist_id)
+    starts = to_minutes(start_time)
+    ends = starts + int(artist["duration_min"])
+
+    # FA R1: one artist, one performance. The booking being edited is allowed to be that artist.
+    for booking in all_bookings():
+        if booking["artist_id"] != str(artist_id):
+            continue
+        if booking_id is not None and booking["id"] == str(booking_id):
+            continue
+        return artist["name"] + " is already playing at " + booking["start_time"] + " on " \
+            + stage_name(booking["stage_id"]) + "."
+
+    # FA R2: the set has to fit inside the festival day.
+    if starts < to_minutes(opens()):
+        return "The festival opens at " + opens() + ". " + artist["name"] \
+            + " cannot start at " + start_time + "."
+    if ends > to_minutes(closes()):
+        return artist["name"] + " plays for " + artist["duration_min"] \
+            + " minutes, so a " + start_time + " start would run to " + to_time_text(ends) \
+            + ". The festival closes at " + closes() + "."
+
+    # FA R2: one stage cannot hold two sets at once. Other stages are free to clash (FA R3).
+    for booking in all_bookings():
+        if booking["stage_id"] != str(stage_id):
+            continue
+        if booking_id is not None and booking["id"] == str(booking_id):
+            continue
+        other = get_artist(booking["artist_id"])
+        other_starts = to_minutes(booking["start_time"])
+        other_ends = other_starts + int(other["duration_min"])
+        if overlaps(starts, ends, other_starts, other_ends):
+            return stage_name(stage_id) + " is busy from " + booking["start_time"] + " to " \
+                + to_time_text(other_ends) + " with " + other["name"] + "."
+
+    # FA R4: the fee has to fit what is left. An edit does not pay the fee twice.
+    already_paying = booking_id is not None and get_booking(booking_id) is not None \
+        and get_booking(booking_id)["artist_id"] == str(artist_id)
+    if not already_paying:
+        fee = int(artist["fee"])
+        if fee > remaining_budget():
+            return artist["name"] + " costs " + str(fee) + " euro and only " \
+                + str(remaining_budget()) + " euro is left."
+
+    return ""
 
 
 def add_booking(artist_id, stage_id, start_time):
     """Add one performance to the lineup, or refuse and say why (FA02)."""
-    raise NotImplementedError("FA02: not built yet")
+    refusal = check_booking(artist_id, stage_id, start_time)
+    if refusal != "":
+        # Nothing is written when we refuse: the saved plan stays exactly as it was.
+        return refusal
+    db.append_row("bookings", {
+        "id": db.next_id("bookings"),
+        "artist_id": str(artist_id),
+        "stage_id": str(stage_id),
+        "start_time": start_time,
+    })
+    return ""
 
 
 def edit_booking(booking_id, stage_id, start_time):
