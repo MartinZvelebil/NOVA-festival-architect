@@ -300,6 +300,33 @@ def style_the_metric_cards():
                        border_color=WARM_SAND, box_shadow=False)
 
 
+def show_tutorial():
+    """A few lines on how to plan a festival, for anyone opening the app for the first time."""
+    with st.expander("How this works"):
+        st.markdown(
+            "**Book an artist.** Press **Pick up** on a card in the catalogue below, then click "
+            "a free slot in the timetable. The artist plays on that stage, from that time, for "
+            "as long as their set lasts. You can also click a free slot first and choose the "
+            "artist there."
+        )
+        st.markdown(
+            "**Move or cancel one.** Drag a performance to another time or another stage. "
+            "Click it to see the artist behind it, and to cancel it — cancelling gives the fee "
+            "back."
+        )
+        st.markdown(
+            "**The rules decide.** The festival runs " + logic.opens() + " to " + logic.closes()
+            + ", one performance at a time per stage, each artist only once, and "
+            + str(logic.budget()) + " € in total. Anything that breaks a rule is refused and "
+            "explained, and nothing changes."
+        )
+        st.markdown(
+            "**Finish the plan.** Once " + str(logic.min_artists_to_finalise())
+            + " artists are booked, use **Finalise the lineup** in the sidebar. A final lineup "
+            "cannot be changed until you reopen it as a draft."
+        )
+
+
 def show_sidebar():
     """The plan's status and the budget, shared by everything on the page."""
     st.sidebar.title("Festival Architect")
@@ -492,6 +519,7 @@ st.set_page_config(page_title="Festival Architect", layout="wide")
 show_sidebar()
 
 st.title("The festival")
+show_tutorial()
 show_messages()
 
 timetable_column, panel_column = st.columns([3, 1])

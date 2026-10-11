@@ -219,3 +219,17 @@ def test_a_message_goes_away_once_its_time_is_up(tmp_path, monkeypatch):
     app.run()
     assert app.warning == []
     assert "message" not in app.session_state
+
+
+def test_the_tutorial_describes_the_festival_that_is_configured(tmp_path, monkeypatch):
+    """The how-to reads the settings, so it cannot tell the organiser the wrong hours."""
+    use_temp_data(tmp_path, monkeypatch)
+    save_catalogue([make_artist("1", duration_min="60")])
+    set_setting("closes", "20:00")
+    set_setting("budget", 4500)
+
+    app = open_app()
+    assert not app.exception
+    said = " ".join(block.value for block in app.markdown)
+    assert "14:00 to 20:00" in said
+    assert "4500 €" in said
