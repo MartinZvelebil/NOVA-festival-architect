@@ -21,7 +21,7 @@ Implements FA03.
       18:00 first and 15:00 second still lists 15:00 first.
 - [ ] The timetable screen draws both stages as a `streamlit-calendar` day view: one column per
       stage, the day running from `opens()` to `closes()`, one block per performance showing the
-      artist and the times. Stage 1 is riso red, Stage 2 is bulb amber (see `CLAUDE.md`).
+      artist and the times. Stage 1 is timber brown, Stage 2 is olive green (see `CLAUDE.md`).
 - [ ] The budget is shown as `streamlit-extras` metric cards: total fees and remaining budget,
       both recalculated after every accepted change.
 - [ ] Both numbers are computed from the saved bookings every time. No running total is stored
