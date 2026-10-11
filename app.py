@@ -12,6 +12,9 @@ from streamlit_extras.metric_cards import style_metric_cards
 import logic
 
 CARDS_PER_ROW = 4
+# Every card is the same height, so a row lines up whether or not an artist is booked
+# or priced out of what is left.
+CARD_HEIGHT = 210
 
 # The two stage colours from CLAUDE.md, in stage order. A colour always means a stage.
 STAGE_COLOURS = ["#865D36", "#4A5D3A"]
@@ -460,20 +463,23 @@ def show_artist_card(artist, column):
     held = artist["id"] == armed_artist_id()
     over_budget = shortfall_text(artist)
 
-    with column.container(border=True):
+    with column.container(border=True, height=CARD_HEIGHT):
         if booked:
             st.markdown("#### :grey[" + artist["name"] + "]")
-            st.caption(artist["genre"] + " · " + artist["fee"] + " € · "
-                       + artist["duration_min"] + " min")
-            st.caption("Already playing")
-            return
-
-        st.markdown("#### " + artist["name"])
+        else:
+            st.markdown("#### " + artist["name"])
         st.caption(artist["genre"] + " · **" + artist["fee"] + " €** · "
                    + artist["duration_min"] + " min")
-        if over_budget != "":
+        if over_budget != "" and not booked:
             st.caption(":grey[" + over_budget + "]")
+
         if logic.is_final():
+            # a final plan picks nobody up, so no card carries a button at all
+            return
+        if booked:
+            # the same button, greyed out: without it the row would not line up
+            st.button("Already playing", key="booked_" + artist["id"], disabled=True,
+                      use_container_width=True)
             return
         st.button("Holding" if held else "Pick up", key="arm_" + artist["id"],
                   use_container_width=True, type="primary" if held else "secondary",
