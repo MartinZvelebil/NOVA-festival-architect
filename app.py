@@ -20,6 +20,8 @@ CARD_HEIGHT = 210
 STAGE_COLOURS = ["#865D36", "#4A5D3A"]
 PAPER = "#F3EADF"
 WARM_SAND = "#AC8968"
+SOIL = "#3E362E"
+OLIVE = "#4A5D3A"
 
 # The brief describes one festival day but never dates it. The calendar needs some date to
 # draw, so we pick one; nothing is stored against it and no rule ever reads it.
@@ -290,6 +292,23 @@ def cancel_performance(booking_id):
 
 # ---------- the sidebar: the plan and the money ----------
 
+# Streamlit paints its own green and amber into st.success and st.warning, and neither colour is
+# in the palette. Both messages get the warm sand card, soil text and one olive edge instead: the
+# sentence carries the good or the bad news, not the colour.
+MESSAGE_CSS = """
+    <style>
+    div[data-testid="stAlert"] { background-color: %s; color: %s;
+        border: 1px solid %s; border-left: 5px solid %s; border-radius: 8px; }
+    div[data-testid="stAlert"] p, div[data-testid="stAlert"] svg { color: %s; fill: %s; }
+    </style>
+""" % (WARM_SAND, SOIL, OLIVE, OLIVE, SOIL, SOIL)
+
+
+def style_the_messages():
+    """Put every message on the palette, so no Streamlit green or amber is left on screen."""
+    st.markdown(MESSAGE_CSS, unsafe_allow_html=True)
+
+
 def style_the_metric_cards():
     """Give every metric on the page its card. One call styles them all, wherever they are.
 
@@ -537,3 +556,4 @@ with panel_column:
 
 show_catalogue()
 style_the_metric_cards()
+style_the_messages()
