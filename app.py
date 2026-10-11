@@ -105,10 +105,15 @@ def free_artist_ids():
     return ids
 
 
+def clock_value(time_text):
+    """Turn a stored time like '16:30' into the clock value a time picker wants."""
+    minutes = logic.to_minutes(time_text)
+    return time(minutes // 60, minutes % 60)
+
+
 def opening_time():
     """Return the festival's opening time as a clock value, for the time picker's default."""
-    minutes = logic.to_minutes(logic.opens())
-    return time(minutes // 60, minutes % 60)
+    return clock_value(logic.opens())
 
 
 def chosen_position(free):
@@ -254,6 +259,7 @@ def show_booking():
 def show_lineup():
     """The festival day as a calendar: one column per stage, opening time to closing time."""
     st.title("The lineup")
+    show_remembered_message()
     show_budget()
 
     if len(logic.all_bookings()) == 0:
@@ -269,8 +275,75 @@ def show_lineup():
     with detail_column:
         show_clicked_performance(clicked)
 
+    show_revise(clicked_booking_id(clicked))
+
     with st.expander("The same lineup as a list"):
         show_lineup_as_a_list()
+
+
+def booking_label(booking_id):
+    """Turn a booking id into the text shown in the performance picker."""
+    booking = logic.get_booking(booking_id)
+    artist = logic.get_artist(booking["artist_id"])
+    return (artist["name"] + " · " + logic.stage_name(booking["stage_id"])
+            + " · " + booking["start_time"])
+
+
+def booked_ids():
+    """Return the ids of every performance in the lineup, in time order within each stage."""
+    ids = []
+    for stage in logic.all_stages():
+        for performance in logic.timetable(stage["id"]):
+            ids.append(performance["booking_id"])
+    return ids
+
+
+def position_of(booking_id, ids):
+    """Return where a performance sits in the picker, or 0 when it is not there."""
+    for position in range(len(ids)):
+        if ids[position] == booking_id:
+            return position
+    return 0
+
+
+def show_revise(clicked_id):
+    """Move a performance to another stage or time, or take it out of the lineup (FA04)."""
+    st.subheader("Change a performance")
+    ids = booked_ids()
+    if len(ids) == 0:
+        return
+
+    # the block just clicked in the timetable is the one the form opens on
+    booking_id = st.selectbox("Performance", ids, index=position_of(clicked_id, ids),
+                              format_func=booking_label)
+    booking = logic.get_booking(booking_id)
+
+    with st.form("edit_booking"):
+        stage_id = st.selectbox("Move to stage", stage_ids(),
+                                index=position_of(booking["stage_id"], stage_ids()),
+                                format_func=stage_label)
+        picked = st.time_input("Move to start time", value=clock_value(booking["start_time"]),
+                               step=300)
+        start_time = logic.to_time_text(picked.hour * 60 + picked.minute)
+        move, remove = st.columns(2)
+        moved = move.form_submit_button("Move performance", use_container_width=True)
+        removed = remove.form_submit_button("Remove from lineup", use_container_width=True)
+
+    if moved:
+        refusal = logic.edit_booking(booking_id, stage_id, start_time)
+        if refusal == "":
+            remember_message(booking_label(booking_id) + " — moved.")
+            st.rerun()
+        else:
+            st.warning(refusal)
+    if removed:
+        name = logic.get_artist(booking["artist_id"])["name"]
+        refusal = logic.remove_booking(booking_id)
+        if refusal == "":
+            remember_message(name + " is out of the lineup. The fee is back in the budget.")
+            st.rerun()
+        else:
+            st.warning(refusal)
 
 
 def clicked_booking_id(clicked):
