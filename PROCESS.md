@@ -72,7 +72,7 @@ The opening time, closing time, budget and minimum-lineup-size started as consta
 I moved them into `data/settings.csv`, read through `db.py` like any other table — not a new
 mechanism, so it inherits seeding, resetting and test isolation for free.
 
-The tests were split rather than loosened: `test_acceptance.py` keeps asserting the brief's literal
+I split the tests rather than loosen them: `test_acceptance.py` keeps asserting the brief's literal
 numbers against the shipped settings, and a new `test_settings.py` proves the rules actually follow
 the config — set the budget to 3,000 and a 3,001 artist is refused; close at 20:00 and a set
 running past it is refused.
@@ -91,17 +91,17 @@ The palette went through two rounds. The first, taken from a photo of a bar, was
 green with a riso red. To judge it I built a **throwaway preview** in the scratchpad — fake lineup,
 hard-coded, outside the repo — rendering the calendar and the metric cards in the real colours.
 Seeing it beat imagining it: the second palette, "earthy and serene" (warm sand, soil, olive,
-timber brown), is the one that stayed. The preview was deleted afterwards.
+timber brown), is the one I kept. I threw the preview away afterwards.
 
-The rules went into `CLAUDE.md`: colours live in `.streamlit/config.toml` and never in `app.py`,
+I put the rules into `CLAUDE.md`: colours live in `.streamlit/config.toml` and never in `app.py`,
 the calendar is for the timetable only, extras is for polish only, and `logic.py` never imports
 Streamlit or mentions a colour.
 
 ## Step 7 — Split the build into tasks
 
 Using the course planning sheet (Why / What / Out of scope / Done when, with at least three checks:
-an accepted action, a rejected action with unchanged data, and a restart), the work became seven
-specs in `specs/`, indexed by `specs/00-task-list.md`:
+an accepted action, a rejected action with unchanged data, and a restart), I split the work into
+seven specs in `specs/`, indexed by `specs/00-task-list.md`:
 
 | # | Task | Tests it turns green |
 | --- | --- | --- |
@@ -113,7 +113,7 @@ specs in `specs/`, indexed by `specs/00-task-list.md`:
 | 6 | One screen, planned like a calendar | write them first |
 | 7 | Polish and hand-in | all |
 
-The counts were checked with `pytest --collect-only`, not estimated: 3 + 15 + 3 + 5 = the 26 red
+I checked the counts with `pytest --collect-only` rather than estimate them: 3 + 15 + 3 + 5 = the 26 red
 tests exactly.
 
 **Granularity rule.** A task is a slice you can demo, sized to one sitting. That is why "book an
@@ -129,8 +129,9 @@ be booked. Task 4 before 5, because finalisation is a lock on top of editing.
 
 ## Step 8 — Build the tasks, one branch at a time
 
-Each task was its own branch, its own red-to-green run and its own pull request. The suite grew
-from 33 tests to 60, and never went green by changing a test to match the code.
+I built each task on its own branch, watched its tests fail before writing the code, and merged it
+through its own pull request. The suite grew from 33 tests to 60, and I never got it green by
+changing a test to match the code.
 
 | Task | What it added | Suite after |
 | --- | --- | --- |
@@ -142,65 +143,67 @@ from 33 tests to 60, and never went green by changing a test to match the code.
 | 6 One screen | the whole product on one page, arm-and-place booking | 56 passed |
 | 7 Polish and hand-in | README, the requirement map, messages on the palette | 60 passed |
 
-Task 5 is the moment the suite first went fully green: every test written back in Step 4, before a
+Task 5 is the moment the suite first went fully green: every test I wrote back in Step 4, before a
 single rule existed, now passed.
 
 ## Step 9 — Let the design argue back
 
-The UI was not designed once and built. It was built, looked at, and changed — eight times, each
-one a small commit after seeing the thing on screen:
+I did not design the interface once and then build it. I built it, opened it, disliked something,
+and changed it — eight times, each one a small commit after seeing the thing on screen:
 
-- the catalogue went from a dot-separated list to cards, then to four per row, then to a fixed
-  height so a booked card and a free card line up;
-- the timetable grew clickable blocks, then a detail panel **beside** the calendar instead of
-  under it, because a panel below the fold gives no sign that the click did anything;
-- dragging replaced the manual move form, and the drag step went 30 → 15 → 5 minutes as the form
-  disappeared and precision had to come from somewhere;
-- **the biggest change came from a question, not a bug.** Asking "why is this two screens?" had no
-  good answer — the split was copied from the starter apps, not from the brief. Task 6's spec was
-  rewritten and the app became one page.
+- I turned the catalogue from a dot-separated list into cards, then asked for four per row, then
+  for a fixed height once I noticed a booked card and a free card did not line up;
+- I asked for the timetable blocks to be clickable, and then for the detail to sit **beside** the
+  calendar rather than under it — below the fold, a click gave no sign it had done anything;
+- I asked for dragging instead of the manual move form, and then took the drag step from 30 to 15
+  to 5 minutes, because once the form was gone the precision had to come from somewhere;
+- **my best decision was a question, not a bug report.** I asked why the app was on two screens.
+  There was no good answer — the split had been copied from the starter apps, not from my brief —
+  so I had Task 6's spec rewritten and the app became one page.
 
-The rule that made this safe: all of it was `app.py`. The 45 logic tests never had to care.
+What made all of this safe: every one of those changes was `app.py` alone. My 45 logic tests never
+had to care.
 
 ## Step 10 — What the build actually taught
 
-Four things that cost real time and were not in any plan:
+Four things that cost me real time and were in no plan:
 
-- **A stale import looks exactly like a bug.** A `NotImplementedError` traceback appeared for code
-  that was already written: the running Streamlit process had imported `logic` before the merge
-  and kept the old module. Restarting the server fixed it. Nothing was wrong with the code.
-- **Timezones hid inside a click.** `dateClick` returns `date.toISOString()` — UTC — so every
-  clicked slot would have been shifted by the local offset. Pinning the calendar to
-  `timeZone: "UTC"` makes the times sent and the times returned the same. Found by reading the
-  component's own JavaScript, not by debugging a wrong booking.
-- **Not every feature is possible.** Dragging an artist card onto the calendar cannot work:
-  `streamlit-calendar` never creates an external `Draggable`, emits no `drop` callback, and runs
-  in a sandboxed iframe. Arming an artist and clicking a slot is the two-click stand-in, and the
-  reason is written into the spec so it does not look like an omission.
-- **Messages can be eaten by their own redraw.** A refusal was stored, shown, and then consumed by
-  the second redraw the calendar's remount triggered — too fast to read. Messages now carry a
-  ten-second expiry and drain a progress bar.
+- **A stale import looks exactly like a bug.** I hit a `NotImplementedError` for code that was
+  already written, and reported it as broken. It was not: my running Streamlit process had
+  imported `logic` before the merge and kept the old module. Restarting the server fixed it.
+- **Timezones hid inside a click.** `dateClick` returns `date.toISOString()` — UTC — so every slot
+  I clicked would have been booked an hour out. Pinning the calendar to `timeZone: "UTC"` keeps
+  the times sent and the times returned the same. This one was caught by reading the component's
+  own JavaScript before shipping it, not by my noticing a wrong booking later.
+- **Not everything I ask for is possible.** I wanted to drag an artist card onto the calendar.
+  That cannot work: `streamlit-calendar` never creates an external `Draggable`, emits no `drop`
+  callback, and runs in a sandboxed iframe my cards cannot reach into. Picking an artist up and
+  clicking a slot is the two-click stand-in, and I had the reason written into the spec so it does
+  not read like something forgotten.
+- **Messages can be eaten by their own redraw.** I could see a refusal flash past but never read
+  it: it was being consumed by the second redraw that the calendar's remount triggered. Messages
+  now last ten seconds and drain a progress bar.
 
-## Step 11 — Three tests changed, and why each one was allowed
+## Step 11 — Three tests I changed, and why I allowed each one
 
-`CLAUDE.md` says never edit a test to make it pass. Three were changed anyway, each for a reason
-that was stated out loud and agreed before the edit:
+`CLAUDE.md` says never edit a test to make it pass. I changed three anyway, and each time the
+reason was put to me and I decided before the edit was made:
 
-1. **`test_a_longer_festival_day_makes_more_room` was deleted.** Its arithmetic was wrong: a
-   120-minute set from 22:00 ends at 24:00, which no closing time can allow. It also duplicated
-   `test_the_closing_time_rule_uses_the_configured_close`, so nothing was lost.
-2. **`test_the_plan_starts_as_an_empty_draft` was pointed at `seed/`.** It read the live `data/`
-   and asserted it was empty, so it went red the moment anyone used the app. The promise it meant
-   to make was about the pristine data.
-3. **`test_the_lineup_screen_renders` lost its screen switcher.** The two-screen design it
-   described had been deliberately removed. It changed because the design changed, not to go green.
+1. **I deleted `test_a_longer_festival_day_makes_more_room`.** Its arithmetic was wrong: a
+   120-minute set from 22:00 ends at 24:00, which no closing time can allow. I checked it
+   duplicated `test_the_closing_time_rule_uses_the_configured_close` and chose deletion over a fix.
+2. **I pointed `test_the_plan_starts_as_an_empty_draft` at `seed/`.** It read the live `data/` and
+   asserted it was empty, so it went red the moment I booked my first artist. The promise it meant
+   to make was about the pristine data, not my plan.
+3. **`test_the_lineup_screen_renders` lost its screen switcher.** I had removed the two-screen
+   design it described. It changed because my design changed, not to go green.
 
-The pattern: a test is edited when it describes something false or something no longer intended —
-never when it is merely inconvenient.
+The pattern I want to keep: edit a test when it describes something false or something I no longer
+intend — never when it is merely in the way.
 
 ## Where it stands
 
-Seven tasks, nine pull requests, **60 tests passing**. About 1,000 lines of Python, of which
+Seven tasks, nine pull requests, **60 tests passing**. About 1,000 lines of Python, of which my
 `logic.py` is 357 and knows nothing about Streamlit. Every requirement in `ASSIGNMENT.md` has a
 function that decides it and a test that proves it — the table at the end of this file says which.
 
@@ -215,20 +218,21 @@ function that decides it and a test that proves it — the table at the end of t
 5. **Look at the design before committing to it.** A throwaway preview with fake data costs
    minutes and saved a palette I would have disliked three tasks later.
 6. **Plan the order, and write down why it is the order.** The reason is the part you forget.
-7. **Keep the rules out of the screen.** Every UI change — cards, calendar, one page instead of
-   two — touched only `app.py`. Redesigning twice cost nothing because no rule lived there.
+7. **Keep the rules out of the screen.** Every UI change I asked for — cards, calendar, one page
+   instead of two — touched only `app.py`. Redesigning twice cost me nothing because no rule
+   lived there.
 8. **Check what a library can do before promising it.** Reading the component's own code took
-   minutes and avoided specifying a feature that cannot exist.
-9. **Look at it, then change it.** The best decision in the project came from a question about
-   the design, not from a bug report or a requirement.
+   minutes and stopped me specifying a feature that cannot exist.
+9. **Open it, then change it.** My best decision came from asking a question about the design,
+   not from a bug report or a line in the brief.
 
 ---
 
 ## Where each requirement ended up
 
-Written at the end of Task 7, by walking `ASSIGNMENT.md` line by line and finding, for every ID,
-the one function that decides it and the one test that proves it. Nothing in the table is a plan:
-every line was checked against the code and against a green test run.
+I wrote this at the end of Task 7 by walking `ASSIGNMENT.md` line by line and finding, for every
+ID, the one function that decides it and the one test that proves it. Nothing in the table is a
+plan: I checked every line against the code and against a green test run.
 
 | Requirement | Where the rule is decided | The test that proves it |
 | --- | --- | --- |
@@ -248,6 +252,6 @@ timetable and the budget are both recomputed from `bookings.csv`, which is why t
 disagree. And **a refusal writes nothing**: every mutator checks before it touches `db`, proved by
 comparing the CSV files byte for byte either side of a rejected action.
 
-**What the table is for.** It is the answer to "where does this rule live", and the thing to
-rebuild first if the code ever moves. Writing it was also the last check on the brief: a
-requirement with no function to point at is a requirement that was not built.
+**What the table is for.** It answers "where does this rule live", and it is the first thing I
+would rebuild if the code ever moves. Writing it was also my last check on the brief: a
+requirement I cannot point a function at is a requirement I did not build.
