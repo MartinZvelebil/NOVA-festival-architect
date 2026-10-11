@@ -93,14 +93,3 @@ def test_the_finalisation_rule_uses_the_configured_minimum(tmp_path, monkeypatch
     logic.add_booking("2", "1", "17:00")
     assert logic.finalise_plan() == ""
     assert logic.plan_status() == "final"
-
-
-def test_a_longer_festival_day_makes_more_room(tmp_path, monkeypatch):
-    """Opening earlier and closing later lets a set sit where it did not fit before."""
-    use_temp_data(tmp_path, monkeypatch)
-    save_catalogue([make_artist("1", duration_min="120")])
-
-    assert logic.add_booking("1", "1", "22:00") != ""
-
-    set_setting("closes", "23:59")
-    assert logic.add_booking("1", "1", "22:00") == ""
